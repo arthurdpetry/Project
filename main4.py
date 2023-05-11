@@ -4,28 +4,18 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import yfinance as yf
-import yahoo_fin as yhfin
 import plotly.express as px
 import datetime as dt
 import requests
 import matplotlib.pyplot as plt
 import finnhub
 import plotly.graph_objs as go
-from datetime import timedelta
 from bs4 import BeautifulSoup
 from streamlit_option_menu import option_menu
 from alpha_vantage.fundamentaldata import FundamentalData
-from alpha_vantage.timeseries import TimeSeries
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from yahoo_fin.stock_info import get_data
 from yahoo_fin import stock_info as si
-from pandas_datareader import DataReader
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 # FundamentalData's key:
 
