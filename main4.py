@@ -1,20 +1,19 @@
 
 # Importing the required libraries:
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-import datetime as dt
-import requests
-import matplotlib.pyplot as plt
-import finnhub
-import plotly.graph_objs as go
-from bs4 import BeautifulSoup
-from streamlit_option_menu import option_menu
 from alpha_vantage.fundamentaldata import FundamentalData
+import datetime as dt
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import finnhub
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objs as go
+import streamlit as st
+from streamlit_option_menu import option_menu
+import requests
 from yahoo_fin import stock_info as si
 
 # FundamentalData's key:
