@@ -150,11 +150,66 @@ if selected == 'Stock Ideas':
 
     with content:
 
+        def convert_market_cap(value):
+            if isinstance(value, str):
+                suffixes = {'T': 1e12, 'B': 1e9}
+                if value[-1] in suffixes:
+                    factor = suffixes[value[-1]]
+                    value = value[:-1]
+                    value = int(float(value) * factor)
+                else:
+                    value = int(value.replace(',', ''))
+                return '{:,}'.format(value)
+            else:
+                return '{:,}'.format(value)
+
+        def format_numbers(value):
+            if isinstance(value, (int, float)):
+                return '{:,.0f}'.format(value)
+            else:
+                return value
+        
+        def convert_market_cap2(value, column_name):
+            if isinstance(value, str):
+                if 'B' in value:
+                    factor = 1e9
+                elif 'M' in value:
+                    factor = 1e6
+                elif 'K' in value:
+                    factor = 1e3
+                else:
+                    factor = 1
+                value = float(value.replace(',', '').replace('$', '').replace(column_name, '')) * factor
+            if column_name in ['Market Cap']:
+                return '{:,.0f}'.format(value)
+            else:
+                return '{:,.2f}'.format(value)
+            
+        def convert_volume2(value, column_name):
+            if isinstance(value, str):
+                if 'B' in value:
+                    factor = 1e9
+                elif 'M' in value:
+                    factor = 1e6
+                elif 'K' in value:
+                    factor = 1e3
+                else:
+                    factor = 1
+                value = float(value.replace(',', '').replace('$', '').replace(column_name, '')) * factor
+            if column_name in ['Volume']:
+                return '{:,.0f}'.format(value)
+            else:
+                return '{:,.2f}'.format(value)
+
         # Get and display the titles and dataframes in streamlit (handling possible errors):
         
         try:
             df_winners = si.get_day_gainers()
             dfw_clean = df_winners.drop(['Avg Vol (3 month)', 'PE Ratio (TTM)', 'Change'], axis=1)
+            dfw_clean['% Change'] = dfw_clean['% Change'].apply(lambda x: '{:,}'.format(x))
+            dfw_clean['Volume'] = dfw_clean['Volume'].apply(lambda x: '{:,}'.format(x))
+            dfw_clean[['Volume', 'Market Cap']] = dfw_clean[['Volume', 'Market Cap']].applymap(format_numbers)
+            dfw_clean['Market Cap'] = dfw_clean['Market Cap'].apply(convert_market_cap)
             st.subheader('Top 100 stocks with higher profitability today')
             st.dataframe(dfw_clean)
             st.markdown('')
@@ -166,6 +221,10 @@ if selected == 'Stock Ideas':
         try:
             df_losers = si.get_day_losers()
             dfl_clean = df_losers.drop(['Avg Vol (3 month)', 'PE Ratio (TTM)', 'Change'], axis=1)
+            dfl_clean['% Change'] = dfl_clean['% Change'].apply(lambda x: '{:,}'.format(x))
+            dfl_clean['Volume'] = dfl_clean['Volume'].apply(lambda x: '{:,}'.format(x))
+            dfl_clean[['Volume', 'Market Cap']] = dfl_clean[['Volume', 'Market Cap']].applymap(format_numbers)
+            dfl_clean['Market Cap'] = dfl_clean['Market Cap'].apply(convert_market_cap)
             st.subheader('Top 100 stocks with higher losses today')
             st.dataframe(dfl_clean)
             st.markdown('')
@@ -177,6 +236,8 @@ if selected == 'Stock Ideas':
         try:
             df_active = si.get_day_most_active()
             dfa_clean = df_active.drop(['Market Cap', 'PE Ratio (TTM)', 'Change'], axis=1)
+            dfa_clean['% Change'] = dfa_clean['% Change'].apply(lambda x: '{:,}'.format(x))
+            dfa_clean['Volume'] = dfa_clean['Volume'].apply(lambda x: '{:,}'.format(x))
             st.subheader('Top 100 stocks with higher trading volume today')
             st.dataframe(dfa_clean)
             st.markdown('')
@@ -188,6 +249,10 @@ if selected == 'Stock Ideas':
         try:
             df_value = si.get_undervalued_large_caps()
             dfv_clean = df_value.drop(['Avg Vol (3 month)', 'PE Ratio (TTM)', 'Change', '52 Week Range'], axis=1)
+            dfv_clean['% Change'] = dfv_clean['% Change'].apply(lambda x: '{:,}'.format(x))
+            dfv_clean['Volume'] = dfv_clean['Volume'].apply(lambda x: '{:,}'.format(x))
+            dfv_clean[['Volume', 'Market Cap']] = dfv_clean[['Volume', 'Market Cap']].applymap(format_numbers)
+            dfv_clean['Market Cap'] = dfv_clean['Market Cap'].apply(convert_market_cap)
             st.subheader('Top 100 undervalued large cap stocks')
             st.dataframe(dfv_clean)
             st.markdown('')
