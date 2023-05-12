@@ -2,11 +2,11 @@
 # Importing the required libraries:
 
 from alpha_vantage.fundamentaldata import FundamentalData
+from bs4 import BeautifulSoup
 import datetime as dt
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import finnhub
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -334,7 +334,7 @@ if selected == 'Daily Prices':
             annual_returnp = '{:.2%}'.format(annual_return)
             st.metric('Annual Return is',annual_returnp)
             stdev = np.std(dfb['% Change'])*np.sqrt(252)
-            stdev_round = round(stdev*100,2)
+            stdev_round = round(stdev,2)
             st.metric('Standard Devation is',stdev_round)
             risk_adj_return = annual_return/stdev_round
             risk_adj_returnp = '{:.2%}'.format(risk_adj_return)
@@ -422,7 +422,7 @@ if selected == 'Monthly Returns':
             annual_returnp = '{:.2%}'.format(annual_return)
             st.metric('Annual Return is',annual_returnp)
             stdev = np.std(dfb['% Change'])*np.sqrt(252)
-            stdev_round = round(stdev*100,2)
+            stdev_round = round(stdev,2)
             st.metric('Standard Devation is',stdev_round)
             risk_adj_return = annual_return/stdev_round
             risk_adj_returnp = '{:.2%}'.format(risk_adj_return)
@@ -451,8 +451,8 @@ if selected == 'Financial Statements':
 
         # Data for the plot:
 
-        earnings_data = finnhub_client.company_earnings(ticker, limit=5) # Call the method to get the data
-        quarters = [round(x['quarter'],2) for x in earnings_data] # Iterate over the data to extract the 'quarter' property
+        earnings_data = finnhub_client.company_earnings(ticker, limit=5) # Call the method to get the data.
+        quarters = [round(x['quarter'],2) for x in earnings_data] # Iterate over the data to extract the "quarter" property.
         actual_eps = [round(x['actual'],2) for x in earnings_data]
         estimated_eps = [round(x['estimate'],2) for x in earnings_data]
         surprise_percent = [round(x['surprisePercent'],2) for x in earnings_data]
@@ -677,35 +677,50 @@ if selected == 'Analysts Recommendations':
         targetMeanPrices.append(targetMeanPrice)
         currentPrices.append(currentPrice)
 
-        st.markdown ('**According to analysts :**')
-        st.markdown ('{} has an average recommendation of: '.format(ticker), recommendation)
-        st.markdown ('{} has a target mean price of: '.format(ticker), targetMeanPrice)
-        st.markdown ('{} has a current price of: '.format(ticker), currentPrice)
-
         # Analyst Recommendation Finnhub:
 
-        def plot_stock_data(stock_data):
-            symbol = stock_data[0]['symbol']
-            buy_values = [data['buy'] for data in stock_data]
-            hold_values = [data['hold'] for data in stock_data]
-            sell_values = [data['sell'] for data in stock_data]
-            strong_buy_values = [data['strongBuy'] for data in stock_data]
-            strong_sell_values = [data['strongSell'] for data in stock_data]
+        graph, metrics = st.columns([5,2])
+        
+        with graph:
+            def plot_stock_data(stock_data):
+                symbol = stock_data[0]['symbol']
+                latest_data = stock_data[0]
+                labels = ['Buy', 'Hold', 'Sell', 'Strong Buy', 'Strong Sell']
+                values = [latest_data['buy'], latest_data['hold'], latest_data['sell'], latest_data['strongBuy'], latest_data['strongSell']]
+                
+                # Calculate the index of the slice with the highest value:
 
-            latest_data = stock_data[0]
-            labels = ['Buy', 'Hold', 'Sell', 'Strong Buy', 'Strong Sell']
-            values = [latest_data['buy'], latest_data['hold'], latest_data['sell'], latest_data['strongBuy'], latest_data['strongSell']]
-            explode = [0] * len(labels)  # Initialize explode values to 0.
-            explode[values.index(max(values))] = 0.1  # Explode the highest value.
+                max_index = values.index(max(values))
+                
+                # Build the plotly pie chart:
 
-            fig2, ax = plt.subplots()
-            ax.pie(values, explode=explode, labels=labels, autopct='%1.1f%%', startangle=90)
-            ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-            plt.title(f'Stock Ratings for {symbol} ({latest_data["period"]})')
-            st.plotly_chart(fig2)
+                fig = go.Figure(data=[go.Pie(labels=labels, values=values)])
+                period_str = datetime.strptime(latest_data['period'], '%Y-%m-%d').strftime('%d/%m/%Y')
+                fig.update_layout(title=f'Stock Ratings for {symbol} ({period_str})')
+                
+                # Pull the slice with the highest value:
 
-        plot_stock_data(finnhub_client.recommendation_trends(ticker)) 
+                pull_list = [0] * len(labels)
+                pull_list[max_index] = 0.1
+                fig.update_traces(pull=pull_list)
+                
+                # Set the legend orientation and position:
 
+                fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="right", x=0.5))
+                fig.update_traces(domain=dict(x=[0, 0.5]))
+                st.plotly_chart(fig)
+
+            plot_stock_data(finnhub_client.recommendation_trends(ticker))
+
+        with metrics:
+            st.markdown('')
+            st.markdown('')
+            st.markdown ('**According to analysts :**')
+            st.metric (label='Average recommendation', value=f'{recommendation}')
+            st.metric (label='Mean target price', value=f'${targetMeanPrice}')
+            st.metric (label='Current price', value=f'${currentPrice}')
+        
+        
         def create_stock_dataframe(stock_data):
             periods = [data['period'] for data in stock_data]
             buys = [data['buy'] for data in stock_data]
@@ -714,14 +729,10 @@ if selected == 'Analysts Recommendations':
             strong_buys = [data['strongBuy'] for data in stock_data]
             strong_sells = [data['strongSell'] for data in stock_data]
 
-            df = pd.DataFrame({'Period': periods,
-                               'Buy': buys,
-                               'Hold': holds,
-                               'Sell': sells,
-                               'Strong Buy': strong_buys,
-                               'Strong Sell': strong_sells})
+            df = pd.DataFrame({'Period': periods, 'Strong Buy': strong_buys, 'Buy': buys, 'Hold': holds, 'Sell': sells, 'Strong Sell': strong_sells})
 
             df.set_index('Period', inplace=True)  # Set the Period column as the index.
+            df.index = pd.to_datetime(df.index, format='%Y-%m-%d').strftime('%d/%m/%Y')
             return df
 
         df = create_stock_dataframe(finnhub_client.recommendation_trends(ticker))
