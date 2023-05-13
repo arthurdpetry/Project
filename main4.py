@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
+from plotly.subplots import make_subplots
 import requests
 import seaborn as sb
 from sklearn import metrics
@@ -904,22 +905,41 @@ if selected == 'Predictions':
         df['close'] = df['adjclose']
         df = df.drop(['adjclose'], axis=1)
 
-        # Plot distributions of features:
+        # Time series model:
+        
+        st.subheader(f'Time series prediction model for {ticker}')
+        st.markdown('')
+        
+        distributions = st.container()
+        prices = st.container()
+        confusion = st.container()
+        prediction = st.container()
+        
+        with distributions:
 
-        features = ['open', 'high', 'low', 'close', 'volume']
-        plt.subplots(figsize=(20,10))
-        for i, col in enumerate(features):
-            plt.subplot(2,3,i+1)
-            sb.distplot(df[col])
-        plt.show()
+            st.markdown('')
+            st.markdown('**Distribution of input values:**')
+            st.markdown('')
+            st.markdown(':red[*You can select and disselect the features shown in the graph through the legend in the left upper corner.]')
+
+            # Plot distributions of features:
+
+            fig = go.Figure()
+            features = ['open', 'high', 'low', 'close', 'volume']
+            for col in features:
+                trace_name = col.capitalize()
+                fig.add_trace(go.Histogram(x=df[col], name=trace_name))
+                fig.update_layout(barmode='overlay', bargap=0.1)
+            fig.update_layout(title='Distribution of the Selected Features', xaxis_title='Price/Volume', yaxis_title='Value Count')
+            fig.update_traces(visible='legendonly')
+            fig.update_traces(visible=True, selector=dict(name='Open'))
+            st.plotly_chart(fig)
 
         # Add date-related columns:
 
-        df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
         df['day'] = df['date'].dt.day
         df['month'] = df['date'].dt.month
         df['year']= df['date'].dt.year
-
 
         # Add is_quarter_end column:
 
@@ -927,29 +947,27 @@ if selected == 'Predictions':
 
         # Plot average prices by year:
 
-        data_grouped = df.groupby('year').mean()
-        plt.subplots(figsize=(20,10))
-        for i, col in enumerate(['open', 'high', 'low', 'close']):
-            plt.subplot(2,2,i+1)
-            data_grouped[col].plot.bar()
-        plt.show()
+        with prices:
+
+            st.markdown('')
+            st.markdown('**Average prices by year of prediction:**')
+            st.markdown('')
+            st.markdown(':red[*You can select and disselect the features shown in the graph through the legend in the left upper corner.]')
+
+            data_grouped = df.groupby('year').mean()
+            fig = go.Figure()
+            for col in ['open', 'high', 'low', 'close']:
+                trace_name = col.capitalize()
+                fig.add_trace(go.Bar(x=data_grouped.index, y=data_grouped[col], name=trace_name))
+            fig.update_layout(title='Average Prices by Year', barmode='group', xaxis_title='Year', yaxis_title='Average Price')
+            fig.update_yaxes(range=[120, 160], title='Value Count')
+            st.plotly_chart(fig)
 
         # Add additional columns:
 
         df['open-close'] = df['open'] - df['close']
         df['low-high'] = df['low'] - df['high']
         df['target'] = np.where(df['close'].shift(-1) > df['close'], 1, 0)
-
-        # Plot pie chart of target distribution:
-
-        plt.pie(df['target'].value_counts().values, labels=[0, 1], autopct='%1.1f%%')
-        plt.show()
-
-        # Plot correlation heatmap:
-
-        plt.figure(figsize=(10, 10))
-        sb.heatmap(df.corr() > 0.9, annot=True, cbar=False)
-        plt.show()
 
         # Prepare data for modeling:
 
@@ -961,32 +979,73 @@ if selected == 'Predictions':
         # Split data into training and validation sets:
 
         X_train, X_valid, Y_train, Y_valid = train_test_split(features, target, test_size=0.1, random_state=2022)
-        print(X_train.shape, X_valid.shape)
 
         # Train models and evaluate performance:
 
         models = [LogisticRegression(), SVC(kernel='poly', probability=True), XGBClassifier()]
         for i in range(3):
             models[i].fit(X_train, Y_train)
-            print(f'{models[i]} : ')
-            print('Training Accuracy: ', metrics.roc_auc_score(Y_train, models[i].predict_proba(X_train)[:,1]))
-            print('Validation Accuracy: ', metrics.roc_auc_score(Y_valid, models[i].predict_proba(X_valid)[:,1]))
-            print()
+        
+        with confusion:
 
-        # Compute confusion matrix:
+            st.markdown('**Training Accuracy:** ', metrics.roc_auc_score(Y_train, models[i].predict_proba(X_train)[:,1]))
+            st.markdown('**Validation Accuracy:** ', metrics.roc_auc_score(Y_valid, models[i].predict_proba(X_valid)[:,1]))
 
-        cm = confusion_matrix(Y_valid, models[0].predict(X_valid))
+            # Compute confusion matrix:
+            cm = confusion_matrix(Y_valid, models[0].predict(X_valid))
 
-        # Plot confusion matrix:
+            # Create subplot with heatmap and annotations
+            fig = make_subplots(rows=1, cols=2, column_widths=[0.7, 0.3],
+                                subplot_titles=("Confusion Matrix", "Counts"))
 
-        plt.matshow(cm, cmap=plt.cm.Blues)
-        plt.colorbar()
-        for i in range(cm.shape[0]):
-            for j in range(cm.shape[1]):
-                plt.text(i, j, cm[i, j], va='center', ha='center')
-        plt.xlabel('Predicted label')
-        plt.ylabel('True label')
-        plt.show()
+            # Add heatmap to subplot
+            fig.add_trace(
+                go.Heatmap(
+                    z=cm,
+                    x=["0", "1"],
+                    y=["0", "1"],
+                    colorscale='Blues',
+                    showscale=False,
+                    hoverinfo="skip"
+                ),
+                row=1, col=1
+            )
+
+            # Add annotations to heatmap
+            for i, row in enumerate(cm):
+                for j, value in enumerate(row):
+                    fig.add_annotation(
+                        x=j+1,
+                        y=i+1,
+                        text=str(value),
+                        showarrow=False,
+                        font=dict(color='white', size=18)
+                    )
+
+            # Add counts to subplot
+            fig.add_trace(
+                go.Bar(
+                    x=["0", "1"],
+                    y=[sum(cm[:,0]), sum(cm[:,1])],
+                    marker=dict(color='lightskyblue'),
+                    text=[sum(cm[:,0]), sum(cm[:,1])],
+                    textposition='auto',
+                    opacity=0.7
+                ),
+                row=1, col=2
+            )
+
+            # Update subplot layout
+            fig.update_layout(
+                title='Confusion Matrix',
+                xaxis_title='Predicted label',
+                yaxis_title='True label',
+                height=400,
+                margin=dict(t=100, b=0, l=0, r=0),
+                showlegend=False
+            )
+
+            st.plotly_chart(fig)
 
         # Making predictions on the test data:
 
@@ -1002,23 +1061,22 @@ if selected == 'Predictions':
         for pred in preds:
             predicted_prices.append(last_close * (1 + 0.01 * pred))
 
-        # Plotting the actual and predicted prices together:
+        with prediction:
+                    
+            # Plotting the actual and predicted prices together:
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df['date'], y=df['close'], name='Actual', line=dict(color='blue')))
+            fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[0], name='Logistic Regression', line=dict(color='orange')))
+            fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[1], name='SVM', line=dict(color='green')))
+            fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[2], name='XGBoost', line=dict(color='red')))
+            fig.add_shape(type='line', x0=df['date'].tail(1).values[0], y0=0, x1=df['date'].tail(1).values[0], y1=1, xref='x', yref='paper', line=dict(color='gray', dash='dash'))
+            fig.update_layout(title='Actual vs Predicted Stock Prices', xaxis_title='date', yaxis_title='price', legend=dict(x=0, y=1, bgcolor='rgba(255,255,255,0.5)', bordercolor='rgba(0,0,0,0)'))
+            st.plotly_chart(fig)
 
-        plt.figure(figsize=(20, 10))
-        plt.plot(df['date'], df['close'], label='Actual', color='blue')
-        plt.plot(df['date'].tail(1), predicted_prices[0], label='Logistic Regression', color='orange')
-        plt.plot(df['date'].tail(1), predicted_prices[1], label='SVM', color='green')
-        plt.plot(df['date'].tail(1), predicted_prices[2], label='XGBoost', color='red')
-        plt.axvline(x=df['date'].tail(1).values[0], linestyle='--', color='gray')
-        plt.legend()
-        plt.title('Actual vs Predicted Stock Prices')
-        plt.xlabel('date')
-        plt.ylabel('price')
-        plt.show()
-
-        # Displaying model in Streamlit:
-
-        st.subheader(f'Time series prediction model for {ticker}')
+        # EMA model:
+        
+        st.subheader(f'EMA model for {ticker}')
         st.markdown('')
 
     # Creating the footer:
