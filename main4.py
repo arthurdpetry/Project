@@ -7,14 +7,12 @@ import datetime as dt
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import finnhub
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 import requests
-import seaborn as sb
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
@@ -49,7 +47,10 @@ footer = st.container()
 # Creating the alternative pages:
 
 with st.sidebar:
-    selected = option_menu(menu_title = None, options = ['Home', 'Stock Ideas', 'Summary', 'Daily Prices', 'Monthly Returns', 'Financial Statements', 'Analysts Recommendations', 'News', 'Predictions', 'Final Analysis'], default_index=0)
+    selected = option_menu(menu_title = None, options = ['Home', 'Stock Ideas', 'Summary',
+                                                         'Daily Prices', 'Monthly Returns', 'Financial Statements',
+                                                         'Analysts Recommendations', 'News', 'Predictions',
+                                                         'Final Analysis'], default_index=0)
 
 # Creating the sidebar:
 
@@ -905,179 +906,199 @@ if selected == 'Predictions':
         df['close'] = df['adjclose']
         df = df.drop(['adjclose'], axis=1)
 
-        # Time series model:
+        EMA = st.container()
+        time_series = st.container()
         
-        st.subheader(f'Time series prediction model for {ticker}')
-        st.markdown('')
-        
-        distributions = st.container()
-        prices = st.container()
-        confusion = st.container()
-        prediction = st.container()
-        
-        with distributions:
-
-            st.markdown('')
-            st.markdown('**Distribution of input values:**')
-            st.markdown('')
-            st.markdown(':red[*You can select and disselect the features shown in the graph through the legend in the left upper corner.]')
-
-            # Plot distributions of features:
-
-            fig = go.Figure()
-            features = ['open', 'high', 'low', 'close', 'volume']
-            for col in features:
-                trace_name = col.capitalize()
-                fig.add_trace(go.Histogram(x=df[col], name=trace_name))
-                fig.update_layout(barmode='overlay', bargap=0.1)
-            fig.update_layout(title='Distribution of the Selected Features', xaxis_title='Price/Volume', yaxis_title='Value Count')
-            fig.update_traces(visible='legendonly')
-            fig.update_traces(visible=True, selector=dict(name='Open'))
-            st.plotly_chart(fig)
-
-        # Add date-related columns:
-
-        df['day'] = df['date'].dt.day
-        df['month'] = df['date'].dt.month
-        df['year']= df['date'].dt.year
-
-        # Add is_quarter_end column:
-
-        df['is_quarter_end'] = np.where(df['month']%3==0,1,0)
-
-        # Plot average prices by year:
-
-        with prices:
-
-            st.markdown('')
-            st.markdown('**Average prices by year of prediction:**')
-            st.markdown('')
-            st.markdown(':red[*You can select and disselect the features shown in the graph through the legend in the left upper corner.]')
-
-            data_grouped = df.groupby('year').mean()
-            fig = go.Figure()
-            for col in ['open', 'high', 'low', 'close']:
-                trace_name = col.capitalize()
-                fig.add_trace(go.Bar(x=data_grouped.index, y=data_grouped[col], name=trace_name))
-            fig.update_layout(title='Average Prices by Year', barmode='group', xaxis_title='Year', yaxis_title='Average Price')
-            fig.update_yaxes(range=[120, 160], title='Value Count')
-            st.plotly_chart(fig)
-
-        # Add additional columns:
-
-        df['open-close'] = df['open'] - df['close']
-        df['low-high'] = df['low'] - df['high']
-        df['target'] = np.where(df['close'].shift(-1) > df['close'], 1, 0)
-
-        # Prepare data for modeling:
-
-        features = df[['open-close', 'low-high', 'is_quarter_end']]
-        target = df['target']
-        scaler = StandardScaler()
-        features = scaler.fit_transform(features)
-
-        # Split data into training and validation sets:
-
-        X_train, X_valid, Y_train, Y_valid = train_test_split(features, target, test_size=0.1, random_state=2022)
-
-        # Train models and evaluate performance:
-
-        models = [LogisticRegression(), SVC(kernel='poly', probability=True), XGBClassifier()]
-        for i in range(3):
-            models[i].fit(X_train, Y_train)
-        
-        with confusion:
-
-            st.markdown('**Training Accuracy:** ', metrics.roc_auc_score(Y_train, models[i].predict_proba(X_train)[:,1]))
-            st.markdown('**Validation Accuracy:** ', metrics.roc_auc_score(Y_valid, models[i].predict_proba(X_valid)[:,1]))
-
-            # Compute confusion matrix:
-            cm = confusion_matrix(Y_valid, models[0].predict(X_valid))
-
-            # Create subplot with heatmap and annotations
-            fig = make_subplots(rows=1, cols=2, column_widths=[0.7, 0.3],
-                                subplot_titles=("Confusion Matrix", "Counts"))
-
-            # Add heatmap to subplot
-            fig.add_trace(
-                go.Heatmap(
-                    z=cm,
-                    x=["0", "1"],
-                    y=["0", "1"],
-                    colorscale='Blues',
-                    showscale=False,
-                    hoverinfo="skip"
-                ),
-                row=1, col=1
-            )
-
-            # Add annotations to heatmap
-            for i, row in enumerate(cm):
-                for j, value in enumerate(row):
-                    fig.add_annotation(
-                        x=j+1,
-                        y=i+1,
-                        text=str(value),
-                        showarrow=False,
-                        font=dict(color='white', size=18)
-                    )
-
-            # Add counts to subplot
-            fig.add_trace(
-                go.Bar(
-                    x=["0", "1"],
-                    y=[sum(cm[:,0]), sum(cm[:,1])],
-                    marker=dict(color='lightskyblue'),
-                    text=[sum(cm[:,0]), sum(cm[:,1])],
-                    textposition='auto',
-                    opacity=0.7
-                ),
-                row=1, col=2
-            )
-
-            # Update subplot layout
-            fig.update_layout(
-                title='Confusion Matrix',
-                xaxis_title='Predicted label',
-                yaxis_title='True label',
-                height=400,
-                margin=dict(t=100, b=0, l=0, r=0),
-                showlegend=False
-            )
-
-            st.plotly_chart(fig)
-
-        # Making predictions on the test data:
-
-        last_close = df['close'].tail(1).values[0]
-        X_test = scaler.transform(df[['open-close', 'low-high', 'is_quarter_end']].tail(1))
-        preds = []
-        for model in models:
-            preds.append(model.predict_proba(X_test)[:,1])
-
-        # Computing the predicted prices based on the last closing price and the predicted probabilities:
-
-        predicted_prices = []
-        for pred in preds:
-            predicted_prices.append(last_close * (1 + 0.01 * pred))
-
-        with prediction:
-                    
-            # Plotting the actual and predicted prices together:
-            
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df['date'], y=df['close'], name='Actual', line=dict(color='blue')))
-            fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[0], name='Logistic Regression', line=dict(color='orange')))
-            fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[1], name='SVM', line=dict(color='green')))
-            fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[2], name='XGBoost', line=dict(color='red')))
-            fig.add_shape(type='line', x0=df['date'].tail(1).values[0], y0=0, x1=df['date'].tail(1).values[0], y1=1, xref='x', yref='paper', line=dict(color='gray', dash='dash'))
-            fig.update_layout(title='Actual vs Predicted Stock Prices', xaxis_title='date', yaxis_title='price', legend=dict(x=0, y=1, bgcolor='rgba(255,255,255,0.5)', bordercolor='rgba(0,0,0,0)'))
-            st.plotly_chart(fig)
-
         # EMA model:
         
-        st.subheader(f'EMA model for {ticker}')
-        st.markdown('')
+        with EMA:
+
+            st.subheader(f'EMA model for {ticker}')
+            st.markdown('')
+
+            # Calculate the EMA for a given time period (e.g. 20 days):
+
+            time_period = 60
+            alpha = 2 / (time_period + 1)
+            ema = df['close'].ewm(alpha=alpha, adjust=False).mean()
+
+            # Calculate the threshold value:
+
+            threshold = ema[-1]
+
+            # Calculate the rolling EMA for the next 30 days:
+
+            rolling_ema = df['close'].ewm(alpha=alpha, adjust=False).mean().iloc[-1]
+            ema_predictions = []
+
+            for i in range(30):
+                ema_predictions.append(rolling_ema)
+                rolling_ema = alpha * df['close'].iloc[-30 + i] + (1 - alpha) * rolling_ema
+
+            # Create a Plotly figure:
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df.index, y=df['close'], name='Actual'))
+            fig.add_trace(go.Scatter(x=df.index, y=ema, name='EMA'))
+            fig.add_trace(go.Scatter(x=df.index[-30:] + pd.DateOffset(days=30), y=ema_predictions, name='EMA Predictions'))
+            fig.add_shape(type='line', x0=df.index[0], y0=threshold, x1=df.index[-1], y1=threshold, line=dict(color='Red', dash='dash'), name='Threshold')
+            fig.update_layout(xaxis=dict(title='Date'), yaxis=dict(title='Price'), hovermode='x', title='EMA Model for ' + ticker)
+
+            # Display the Plotly figure in Streamlit:
+
+            st.plotly_chart(fig)
+        
+        # Time series model:
+
+        with time_series:
+        
+            st.subheader(f'Time series prediction model for {ticker}')
+            st.markdown('')
+            
+            distributions = st.container()
+            prices = st.container()
+            confusion = st.container()
+            prediction = st.container()
+            
+            with distributions:
+
+                st.markdown('')
+                st.markdown('**Distribution of input values:**')
+                st.markdown('')
+                st.markdown(':red[*You can select and disselect the features shown in the graph through the legend in the left upper corner.]')
+
+                # Plot distributions of features:
+
+                fig = go.Figure()
+                features = ['open', 'high', 'low', 'close', 'volume']
+
+                for col in features:
+                    trace_name = col.capitalize()
+                    fig.add_trace(go.Histogram(x=df[col], name=trace_name))
+                    fig.update_layout(barmode='overlay', bargap=0.1)
+                    
+                fig.update_layout(title='Distribution of the Selected Features', xaxis_title='Price/Volume', yaxis_title='Value Count')
+                fig.update_traces(visible='legendonly')
+                fig.update_traces(visible=True, selector=dict(name='Open'))
+                st.plotly_chart(fig)
+
+            # Add date-related columns:
+
+            df['day'] = df['date'].dt.day
+            df['month'] = df['date'].dt.month
+            df['year']= df['date'].dt.year
+
+            # Add is_quarter_end column:
+
+            df['is_quarter_end'] = np.where(df['month']%3==0,1,0)
+
+            # Plot average prices by year:
+
+            with prices:
+
+                st.markdown('')
+                st.markdown('**Average prices by year of prediction:**')
+                st.markdown('')
+                st.markdown(':red[*You can select and disselect the features shown in the graph through the legend in the left upper corner.]')
+
+                data_grouped = df.groupby('year').mean()
+                fig = go.Figure()
+                for col in ['open', 'high', 'low', 'close']:
+
+                    trace_name = col.capitalize()
+                    fig.add_trace(go.Bar(x=data_grouped.index, y=data_grouped[col], name=trace_name))
+
+                fig.update_layout(title='Average Prices by Year', barmode='group', xaxis_title='Year', yaxis_title='Average Price')
+                fig.update_yaxes(range=[120, 160], title='Value Count')
+                st.plotly_chart(fig)
+
+            # Add additional columns:
+
+            df['open-close'] = df['open'] - df['close']
+            df['low-high'] = df['low'] - df['high']
+            df['target'] = np.where(df['close'].shift(-1) > df['close'], 1, 0)
+
+            # Prepare data for modeling:
+
+            features = df[['open-close', 'low-high', 'is_quarter_end']]
+            target = df['target']
+            scaler = StandardScaler()
+            features = scaler.fit_transform(features)
+
+            # Split data into training and validation sets:
+
+            X_train, X_valid, Y_train, Y_valid = train_test_split(features, target, test_size=0.1, random_state=2022)
+
+            # Train models and evaluate performance:
+
+            models = [LogisticRegression(), SVC(kernel='poly', probability=True), XGBClassifier()]
+
+            for i in range(3):
+                models[i].fit(X_train, Y_train)
+            
+            with confusion:
+
+                st.markdown('**Training Accuracy:** ', metrics.roc_auc_score(Y_train, models[i].predict_proba(X_train)[:,1]))
+                st.markdown('**Validation Accuracy:** ', metrics.roc_auc_score(Y_valid, models[i].predict_proba(X_valid)[:,1]))
+
+                # Compute confusion matrix:
+
+                cm = confusion_matrix(Y_valid, models[0].predict(X_valid))
+
+                # Create subplot with heatmap and annotations:
+
+                fig = make_subplots(rows=1, cols=2, column_widths=[0.7, 0.3], subplot_titles=("Confusion Matrix", "Counts"))
+
+                # Add heatmap to subplot:
+
+                fig.add_trace(go.Heatmap(z=cm, x=["0", "1"], y=["0", "1"], colorscale='Blues', showscale=False, hoverinfo="skip"), row=1, col=1)
+
+                # Add annotations to heatmap:
+
+                for i, row in enumerate(cm):
+                    for j, value in enumerate(row):
+                        fig.add_annotation(x=j+1, y=i+1, text=str(value), showarrow=False, font=dict(color='white', size=18))
+
+                # Add counts to subplot:
+
+                fig.add_trace(go.Bar(x=["0", "1"], y=[sum(cm[:,0]), sum(cm[:,1])],marker=dict(color='lightskyblue'),
+                                    text=[sum(cm[:,0]), sum(cm[:,1])],textposition='auto',opacity=0.7),row=1, col=2)
+
+                # Update subplot layout:
+
+                fig.update_layout(title='Confusion Matrix', xaxis_title='Predicted label', yaxis_title='True label',
+                                height=400, margin=dict(t=100, b=0, l=0, r=0), showlegend=False)
+
+                st.plotly_chart(fig)
+
+            # Making predictions on the test data:
+
+            last_close = df['close'].tail(1).values[0]
+            X_test = scaler.transform(df[['open-close', 'low-high', 'is_quarter_end']].tail(1))
+            preds = []
+
+            for model in models:
+                preds.append(model.predict_proba(X_test)[:,1])
+
+            # Computing the predicted prices based on the last closing price and the predicted probabilities:
+
+            predicted_prices = []
+
+            for pred in preds:
+                predicted_prices.append(last_close * (1 + 0.01 * pred))
+
+            with prediction:
+                        
+                # Plotting the actual and predicted prices together:
+
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=df['date'], y=df['close'], name='Actual', line=dict(color='blue')))
+                fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[0], name='Logistic Regression', line=dict(color='orange')))
+                fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[1], name='SVM', line=dict(color='green')))
+                fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[2], name='XGBoost', line=dict(color='red')))
+                fig.add_shape(type='line', x0=df['date'].tail(1).values[0], y0=0, x1=df['date'].tail(1).values[0], y1=1, xref='x', yref='paper', line=dict(color='gray', dash='dash'))
+                fig.update_layout(title='Actual vs Predicted Stock Prices', xaxis_title='date', yaxis_title='price', legend=dict(x=0, y=1, bgcolor='rgba(255,255,255,0.5)', bordercolor='rgba(0,0,0,0)'))
+                st.plotly_chart(fig)
 
     # Creating the footer:
 
@@ -1100,36 +1121,141 @@ if selected == 'Final Analysis':
 
     with content:
 
-        st.markdown('Those following recap information can help you make a choice on whether buy, sell or wait.')
-        st.markdown ('**According to analysts :**')
-        st.markdown ('{} has an average recommendation of: '.format(ticker), recommendation)
-        st.markdown ('{} has a target mean price of: '.format(ticker), targetMeanPrice)
-        st.markdown ('{} has a current price of: '.format(ticker), currentPrice)
-        st.metric('Annual Return is',annual_returnp)
+        st.subheader('Those following recap information can help you make a choice on whether buy, sell or wait.')
+        st.markdown('')
+        st.markdown('')
 
-        # Retrieve the historical stock data for the past 52 weeks and the current price
-        stock_data = yf.download(ticker, period="1y")
-        current_price = stock_data["Close"].iloc[-1]
-        
-        # Calculate the 52 week range
-        high_52_weeks = stock_data["High"].rolling(window=52).max().iloc[-1]
-        low_52_weeks = stock_data["Low"].rolling(window=52).min().iloc[-1]
-        
-        # Create a vertical colorbar style plot to display the 52 week range
-        fig5, ax = plt.subplots(figsize=(1,5))
-        ax.bar(0, high_52_weeks - low_52_weeks, bottom=low_52_weeks, width=0.2, color="lightgrey", label="52 Week Range")
-        ax.bar(0, current_price - low_52_weeks, bottom=low_52_weeks, width=0.2, color="green", label="Current Price")
-        ax.axhline(y=current_price, color="black", linewidth=2, linestyle="--")
-        ax.set_ylim([low_52_weeks, high_52_weeks])
-        ax.set_xlim([-0.5, 0.5])
-        ax.set_xticks([])
-        ax.set_ylabel("Stock Price")
-        ax.legend(loc="upper left")
-        ax.set_title(f"{ticker} 52 Week Range")
-        st.pyplot(fig5) 
+        metric, graph, space = st.columns ([5,3,5])
 
-        st.metric(df_summary.iloc[0:4])
-        #finnhub_client.recommendation_trends(ticker).[values.index(max(values))]
+        # Analyst recommandation Yahoo Finance:
+
+        recommendations = []
+        targetMeanPrices = []
+        currentPrices = []
+
+        lhs_url = 'https://query2.finance.yahoo.com/v10/finance/quoteSummary/'
+        rhs_url = '?formatted=true&crumb=swg7qs5y9UP&lang=en-US&region=US&' \
+                'modules=upgradeDowngradeHistory,recommendationTrend,' \
+                'financialData,earningsHistory,earningsTrend,industryTrend&' \
+                'corsDomain=finance.yahoo.com'
+
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36'}
+        url1 =  lhs_url + ticker + rhs_url
+        r = requests.get(url1, headers=headers)
+
+        if not r.ok:
+            recommendation = 6
+
+        try:
+            result = r.json()['quoteSummary']['result'][0]
+            recommendation =result['financialData']['recommendationMean']['fmt']
+            targetMeanPrice = result['financialData']['targetMeanPrice']['fmt'].replace(',', '')
+            currentPrice = result['financialData']['currentPrice']['fmt'].replace(',', '')
+
+        except:
+            recommendation = 6
+
+        recommendations.append(recommendation)
+        targetMeanPrices.append(targetMeanPrice)
+        currentPrices.append(currentPrice)
+
+        # Getting the data out of yahoo finance:
+
+        df1 = si.get_data(ticker, start_date=start_date, end_date=end_date, index_as_date=True, interval='1d')
+        df2 = si.get_dividends(ticker, start_date=start_date, end_date=end_date, index_as_date=True)
+        df = pd.concat([df1, df2], axis=1)
+
+        # Manage the columns in the dataframe:
+
+        df = df[['adjclose','dividend']]
+        df['dividend'] = df['dividend'].fillna(0)
+        df['% Change'] = df['adjclose'] / df['adjclose'].shift(1) - 1
+        df = df.rename_axis('Date')
+        df = df.rename(columns={'adjclose': 'Adjusted Close Price', 'dividend': 'Dividends', 'index':'Date'})
+
+        # Saving a copy of the dataframe for later:
+
+        dfb = df
+
+        # Formatting the columns:
+
+        df = df.rename(columns={'index': 'Date'})
+        df.index = pd.to_datetime(df.index, format='%d/%m/%Y')
+        df.index = df.index.strftime('%d/%m/%Y')
+        df['Adjusted Close Price'] = df['Adjusted Close Price'].round(2)
+        df['Adjusted Close Price'] = df['Adjusted Close Price'].apply(lambda x: '${:.2f}'.format(x))
+        df['Dividends'] = df['Dividends'].round(2)
+        df['Dividends'] = df['Dividends'].apply(lambda x: '${:.2f}'.format(x))
+        df['% Change'] = df['% Change'].apply(lambda x: '{:.2%}'.format(x))
+
+        annual_return = dfb['% Change'].mean()*252
+        annual_returnp = '{:.2%}'.format(annual_return)
+
+        # Webscarping the data:
+
+        url = f'https://finance.yahoo.com/quote/{ticker}'
+
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        left_table_rows = soup.find('div', {'data-test': 'left-summary-table'}).find_all('tr')
+
+        right_table_rows = soup.find('div', {'data-test': 'right-summary-table'}).find_all('tr')
+
+        # Create a dictionary to store the extracted data:
+
+        data_summary = {}
+
+        for row in left_table_rows:
+            cols = row.find_all('td')
+            data_summary[cols[0].text.strip()] = cols[1].text.strip()
+
+        for row in right_table_rows:
+            cols = row.find_all('td')
+            data_summary[cols[0].text.strip()] = cols[1].text.strip()
+
+        # Create and format a dataframe:
+
+        df_summary = pd.DataFrame(data_summary, index=[0])
+        df_summary = df_summary.transpose()
+        df_summary = df_summary.rename(columns={0: 'Value'})
+
+        with metric:
+            
+            st.markdown ('**According to analysts :**')
+            st.metric (label='Average recommendation', value=f'{recommendation}')
+            st.metric (label='Mean target price', value=f'${targetMeanPrice}')
+            st.metric (label='Current price', value=f'${currentPrice}')
+            st.metric('Annual Return is',annual_returnp)
+            for index, row in df_summary.iloc[0:4].iterrows():
+                st.metric(label=index, value=row['Value'])
+
+        with graph:
+        
+            # Retrieve the historical stock data for the past 52 weeks and the current price:
+
+            stock_data = yf.download(ticker, period="1y")
+            current_price = stock_data["Close"].iloc[-1]
+            
+            # Calculate the 52 week range:
+
+            high_52_weeks = stock_data["High"].rolling(window=52).max().iloc[-1]
+            low_52_weeks = stock_data["Low"].rolling(window=52).min().iloc[-1]
+
+            # Create a vertical colorbar style plot to display the 52 week range:
+
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=[0], y=[high_52_weeks - low_52_weeks],
+                                 base=[low_52_weeks], width=[0.1], marker_color='lightgrey', name="52 Week Range"))
+            fig.add_trace(go.Bar(x=[0], y=[current_price - low_52_weeks],
+                                 base=[low_52_weeks], width=[0.1], marker_color='green', name="Current Price"))
+            fig.add_trace(go.Scatter(x=[0], y=[current_price], mode="lines", 
+                                     line=dict(color="black", width=2, dash="dash"), name="Current Price Line"))
+            fig.update_layout(yaxis=dict(title="Stock Price"), xaxis=dict(visible=False), showlegend=True,
+                              title=dict(text=f"{ticker} 52 Week Range"), height=500, width=500, margin=dict(l=0, r=0, t=40, b=0))
+            st.plotly_chart(fig)
+
+            # finnhub_client.recommendation_trends(ticker).[values.index(max(values))]:
 
     # Creating the footer:
 
