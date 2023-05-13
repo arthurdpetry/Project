@@ -7,14 +7,24 @@ import datetime as dt
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import finnhub
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
+import requests
+import seaborn as sb
+from sklearn import metrics
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 import streamlit as st
 from streamlit_option_menu import option_menu
-import requests
+from xgboost import XGBClassifier
 from yahoo_fin import stock_info as si
+import yfinance as yf
 
 # FundamentalData's key:
 
@@ -38,7 +48,7 @@ footer = st.container()
 # Creating the alternative pages:
 
 with st.sidebar:
-    selected = option_menu(menu_title = None, options = ['Home', 'Stock Ideas', 'Summary', 'Daily Prices', 'Monthly Returns', 'Financial Statements', 'Analysts Recommendations', 'News', 'Predictions'], default_index=0)
+    selected = option_menu(menu_title = None, options = ['Home', 'Stock Ideas', 'Summary', 'Daily Prices', 'Monthly Returns', 'Financial Statements', 'Analysts Recommendations', 'News', 'Predictions', 'Final Analysis'], default_index=0)
 
 # Creating the sidebar:
 
@@ -179,7 +189,7 @@ if selected == 'Stock Ideas':
                     factor = 1e3
                 else:
                     factor = 1
-                value = float(value.replace(',', '').replace('$', '').replace(column_name, '')) * factor
+                value = float(value.replace(',', '').replace('$', '').replace(column_name, '').replace('M','').replace('B','')) * factor
             if column_name in ['Market Cap']:
                 return '{:,.0f}'.format(value)
             else:
@@ -195,7 +205,7 @@ if selected == 'Stock Ideas':
                     factor = 1e3
                 else:
                     factor = 1
-                value = float(value.replace(',', '').replace('$', '').replace(column_name, '')) * factor
+                value = float(value.replace(',', '').replace('$', '').replace(column_name, '').replace('M','').replace('B','')) * factor
             if column_name in ['Volume']:
                 return '{:,.0f}'.format(value)
             else:
@@ -207,7 +217,7 @@ if selected == 'Stock Ideas':
             df_winners = si.get_day_gainers()
             dfw_clean = df_winners.drop(['Avg Vol (3 month)', 'PE Ratio (TTM)', 'Change'], axis=1)
             dfw_clean['% Change'] = dfw_clean['% Change'].apply(lambda x: '{:,}'.format(x))
-            dfw_clean['Volume'] = dfw_clean['Volume'].apply(lambda x: '{:,}'.format(x))
+            dfw_clean['Volume'] = dfw_clean['Volume'].apply(lambda x: '{:,.0f}'.format(x))
             dfw_clean[['Volume', 'Market Cap']] = dfw_clean[['Volume', 'Market Cap']].applymap(format_numbers)
             dfw_clean['Market Cap'] = dfw_clean['Market Cap'].apply(convert_market_cap)
             st.subheader('Top 100 stocks with higher profitability today')
@@ -222,7 +232,7 @@ if selected == 'Stock Ideas':
             df_losers = si.get_day_losers()
             dfl_clean = df_losers.drop(['Avg Vol (3 month)', 'PE Ratio (TTM)', 'Change'], axis=1)
             dfl_clean['% Change'] = dfl_clean['% Change'].apply(lambda x: '{:,}'.format(x))
-            dfl_clean['Volume'] = dfl_clean['Volume'].apply(lambda x: '{:,}'.format(x))
+            dfl_clean['Volume'] = dfl_clean['Volume'].apply(lambda x: '{:,.0f}'.format(x))
             dfl_clean[['Volume', 'Market Cap']] = dfl_clean[['Volume', 'Market Cap']].applymap(format_numbers)
             dfl_clean['Market Cap'] = dfl_clean['Market Cap'].apply(convert_market_cap)
             st.subheader('Top 100 stocks with higher losses today')
@@ -237,7 +247,7 @@ if selected == 'Stock Ideas':
             df_active = si.get_day_most_active()
             dfa_clean = df_active.drop(['Market Cap', 'PE Ratio (TTM)', 'Change'], axis=1)
             dfa_clean['% Change'] = dfa_clean['% Change'].apply(lambda x: '{:,}'.format(x))
-            dfa_clean['Volume'] = dfa_clean['Volume'].apply(lambda x: '{:,}'.format(x))
+            dfa_clean['Volume'] = dfa_clean['Volume'].apply(lambda x: '{:,.0f}'.format(x))
             st.subheader('Top 100 stocks with higher trading volume today')
             st.dataframe(dfa_clean)
             st.markdown('')
@@ -248,11 +258,9 @@ if selected == 'Stock Ideas':
         
         try:
             df_value = si.get_undervalued_large_caps()
-            dfv_clean = df_value.drop(['Avg Vol (3 month)', 'PE Ratio (TTM)', 'Change', '52 Week Range'], axis=1)
-            dfv_clean['% Change'] = dfv_clean['% Change'].apply(lambda x: '{:,}'.format(x))
-            dfv_clean['Volume'] = dfv_clean['Volume'].apply(lambda x: '{:,}'.format(x))
-            dfv_clean[['Volume', 'Market Cap']] = dfv_clean[['Volume', 'Market Cap']].applymap(format_numbers)
-            dfv_clean['Market Cap'] = dfv_clean['Market Cap'].apply(convert_market_cap)
+            dfv_clean = df_value.drop(['Avg Vol (3 month)', 'PE Ratio (TTM)', 'Change', '% Change', '52 Week Range'], axis=1)
+            dfv_clean['Market Cap'] = dfv_clean['Market Cap'].apply(convert_market_cap2, column_name='Market Cap')
+            dfv_clean['Volume'] = dfv_clean['Volume'].apply(convert_volume2, column_name='Volume')
             st.subheader('Top 100 undervalued large cap stocks')
             st.dataframe(dfv_clean)
             st.markdown('')
@@ -686,7 +694,7 @@ if selected == 'Financial Statements':
 
         # Assigning the cash flow statement to the page:
 
-        st.subheader('Cash Flow Statement')
+        st.subheader('Cash Flow Statement (in Millions)')
         st.dataframe(cf)
 
     # Creating the footer:
@@ -785,7 +793,6 @@ if selected == 'Analysts Recommendations':
             st.metric (label='Mean target price', value=f'${targetMeanPrice}')
             st.metric (label='Current price', value=f'${currentPrice}')
         
-        
         def create_stock_dataframe(stock_data):
             periods = [data['period'] for data in stock_data]
             buys = [data['buy'] for data in stock_data]
@@ -873,7 +880,198 @@ if selected == 'Predictions':
 
     with content:
 
-        st.write('coming soon')
+        if ticker == '':
+            ticker = 'AAPL'
+
+        else:
+            pass
+
+        end_date = datetime.today().strftime('%d/%m/%Y')
+        start_date = (datetime.today() - relativedelta(years=1)).strftime('%d/%m/%Y')
+
+        # Load data:
+
+        df1 = si.get_data(ticker, start_date=start_date, end_date=end_date, index_as_date=True, interval='1d')
+        df2 = si.get_dividends(ticker, start_date=start_date, end_date=end_date, index_as_date=True)
+        df = pd.concat([df1, df2], axis=1)
+
+        # Manage the columns in the dataframe:
+
+        df['dividend'] = df['dividend'].fillna(0)
+        df['% change'] = df['adjclose'] / df['adjclose'].shift(1) - 1
+        df['date'] = df.index
+        df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
+        df['close'] = df['adjclose']
+        df = df.drop(['adjclose'], axis=1)
+
+        # Plot distributions of features:
+
+        features = ['open', 'high', 'low', 'close', 'volume']
+        plt.subplots(figsize=(20,10))
+        for i, col in enumerate(features):
+            plt.subplot(2,3,i+1)
+            sb.distplot(df[col])
+        plt.show()
+
+        # Add date-related columns:
+
+        df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
+        df['day'] = df['date'].dt.day
+        df['month'] = df['date'].dt.month
+        df['year']= df['date'].dt.year
+
+
+        # Add is_quarter_end column:
+
+        df['is_quarter_end'] = np.where(df['month']%3==0,1,0)
+
+        # Plot average prices by year:
+
+        data_grouped = df.groupby('year').mean()
+        plt.subplots(figsize=(20,10))
+        for i, col in enumerate(['open', 'high', 'low', 'close']):
+            plt.subplot(2,2,i+1)
+            data_grouped[col].plot.bar()
+        plt.show()
+
+        # Add additional columns:
+
+        df['open-close'] = df['open'] - df['close']
+        df['low-high'] = df['low'] - df['high']
+        df['target'] = np.where(df['close'].shift(-1) > df['close'], 1, 0)
+
+        # Plot pie chart of target distribution:
+
+        plt.pie(df['target'].value_counts().values, labels=[0, 1], autopct='%1.1f%%')
+        plt.show()
+
+        # Plot correlation heatmap:
+
+        plt.figure(figsize=(10, 10))
+        sb.heatmap(df.corr() > 0.9, annot=True, cbar=False)
+        plt.show()
+
+        # Prepare data for modeling:
+
+        features = df[['open-close', 'low-high', 'is_quarter_end']]
+        target = df['target']
+        scaler = StandardScaler()
+        features = scaler.fit_transform(features)
+
+        # Split data into training and validation sets:
+
+        X_train, X_valid, Y_train, Y_valid = train_test_split(features, target, test_size=0.1, random_state=2022)
+        print(X_train.shape, X_valid.shape)
+
+        # Train models and evaluate performance:
+
+        models = [LogisticRegression(), SVC(kernel='poly', probability=True), XGBClassifier()]
+        for i in range(3):
+            models[i].fit(X_train, Y_train)
+            print(f'{models[i]} : ')
+            print('Training Accuracy: ', metrics.roc_auc_score(Y_train, models[i].predict_proba(X_train)[:,1]))
+            print('Validation Accuracy: ', metrics.roc_auc_score(Y_valid, models[i].predict_proba(X_valid)[:,1]))
+            print()
+
+        # Compute confusion matrix:
+
+        cm = confusion_matrix(Y_valid, models[0].predict(X_valid))
+
+        # Plot confusion matrix:
+
+        plt.matshow(cm, cmap=plt.cm.Blues)
+        plt.colorbar()
+        for i in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                plt.text(i, j, cm[i, j], va='center', ha='center')
+        plt.xlabel('Predicted label')
+        plt.ylabel('True label')
+        plt.show()
+
+        # Making predictions on the test data:
+
+        last_close = df['close'].tail(1).values[0]
+        X_test = scaler.transform(df[['open-close', 'low-high', 'is_quarter_end']].tail(1))
+        preds = []
+        for model in models:
+            preds.append(model.predict_proba(X_test)[:,1])
+
+        # Computing the predicted prices based on the last closing price and the predicted probabilities:
+
+        predicted_prices = []
+        for pred in preds:
+            predicted_prices.append(last_close * (1 + 0.01 * pred))
+
+        # Plotting the actual and predicted prices together:
+
+        plt.figure(figsize=(20, 10))
+        plt.plot(df['date'], df['close'], label='Actual', color='blue')
+        plt.plot(df['date'].tail(1), predicted_prices[0], label='Logistic Regression', color='orange')
+        plt.plot(df['date'].tail(1), predicted_prices[1], label='SVM', color='green')
+        plt.plot(df['date'].tail(1), predicted_prices[2], label='XGBoost', color='red')
+        plt.axvline(x=df['date'].tail(1).values[0], linestyle='--', color='gray')
+        plt.legend()
+        plt.title('Actual vs Predicted Stock Prices')
+        plt.xlabel('date')
+        plt.ylabel('price')
+        plt.show()
+
+        # Displaying model in Streamlit:
+
+        st.subheader(f'Time series prediction model for {ticker}')
+        st.markdown('')
+
+    # Creating the footer:
+
+    with footer:
+
+        write_footer(ticker)
+
+# Defining the page 'Final Analysis':
+
+if selected == 'Final Analysis':
+
+    # Creating the header:
+
+    with header:
+
+        st.title(f'Final Analysis for {ticker}')
+        st.markdown('')
+
+    # Content of the page:
+
+    with content:
+
+        st.markdown('Those following recap information can help you make a choice on whether buy, sell or wait.')
+        st.markdown ('**According to analysts :**')
+        st.markdown ('{} has an average recommendation of: '.format(ticker), recommendation)
+        st.markdown ('{} has a target mean price of: '.format(ticker), targetMeanPrice)
+        st.markdown ('{} has a current price of: '.format(ticker), currentPrice)
+        st.metric('Annual Return is',annual_returnp)
+
+        # Retrieve the historical stock data for the past 52 weeks and the current price
+        stock_data = yf.download(ticker, period="1y")
+        current_price = stock_data["Close"].iloc[-1]
+        
+        # Calculate the 52 week range
+        high_52_weeks = stock_data["High"].rolling(window=52).max().iloc[-1]
+        low_52_weeks = stock_data["Low"].rolling(window=52).min().iloc[-1]
+        
+        # Create a vertical colorbar style plot to display the 52 week range
+        fig5, ax = plt.subplots(figsize=(1,5))
+        ax.bar(0, high_52_weeks - low_52_weeks, bottom=low_52_weeks, width=0.2, color="lightgrey", label="52 Week Range")
+        ax.bar(0, current_price - low_52_weeks, bottom=low_52_weeks, width=0.2, color="green", label="Current Price")
+        ax.axhline(y=current_price, color="black", linewidth=2, linestyle="--")
+        ax.set_ylim([low_52_weeks, high_52_weeks])
+        ax.set_xlim([-0.5, 0.5])
+        ax.set_xticks([])
+        ax.set_ylabel("Stock Price")
+        ax.legend(loc="upper left")
+        ax.set_title(f"{ticker} 52 Week Range")
+        st.pyplot(fig5) 
+
+        st.metric(df_summary.iloc[0:4])
+        #finnhub_client.recommendation_trends(ticker).[values.index(max(values))]
 
     # Creating the footer:
 
