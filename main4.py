@@ -1225,8 +1225,6 @@ if selected == 'Final Analysis':
                               title=dict(text=f"{ticker} 52 Week Range"), height=500, width=500, margin=dict(l=0, r=0, t=40, b=0))
             st.plotly_chart(fig)
 
-            
-
     # Creating the footer:
 
     with footer:
