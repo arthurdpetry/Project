@@ -106,34 +106,34 @@ if selected == 'Home':
         st.markdown('''
         The aim of our project is to provide help to individuals with in order to solve
         the dynamic question: **"Should I invest in this stock or rather sell it?"**
-        
+
         Our app provides many tools giving information and analyses on specific stocks, depending on your input. 
         You can navigate through the other pages of the app after inputing the ticker (name) of the asset and the desired start and end dates.
         Under every page in our app, you will also be able to see a list of 10 similar stocks if you wanna compare them.
-        
+
         On "Stock Ideas", you can find trending stock to inspire yourself. You will see the Top 100 daily gainers (the stocks with the higest daily return).
         You will see the Top 100 daily gainers (It is possible it is not displayed as the API seems not to works efficiently everytime with this).
         There is also the Top 100 more traded today and Top 100 undervalued according to Yahoo finance.
-        
+
         On the page "Summary", you can find the 12 basic stock indicators. Those are there to help you understand the stocks without getting involved with more complicated information.
-        
+
         Under "Daily Prices", you can firstly see a dynamic graph where you can zoom on a targeted zone. It helps seeing a more precise time zone.
         Under that graph you can observe a dataframe with the historical data if needed. Next to that, we computed 3 differents return metrics to help you interpret the data.
-        
+
         Regarding "Monthly Returns", it is exactly the same principle as for "Daily Prices", differing in the time frame.
-        
+
         Concerning "Financials Statements", you are able to see 2 differents graphs and 3 dataframes. The first graph is showing you the actual earnings per share compared to the ones expected by analysts.
         It provides you a sort of feeling toward the stocks. For example, if it beats every quarters the expectations, It is a preety good indicator. That is why the second graph plots the surprise of the actual vs expectation.
         It gives you an idea in "%" of that difference. The dataframes represent respectively the balance sheet, the income statement and the cash flow statement.
         Those data are there for the ones willing to analyze more deeply the numbers.
-        
+
         For "Analysts Recommandations", you can find a graph showing you the rating given by a number of analysts for the ticker you entered. 
         Again, it is supposed to give you a tendency of what people expect from this stock. We also display the mean recommandation and the mean targeted price by those analysts.
-        
+
         As for the "News" page, you find the 20 latests news regarding the ticker you entered. You see the headline, the date, a summary of the news and the url to go directly to it. 
         News are a really helpful tool to analyse the future of a stock. If you know that the stock is having a important board meeting tomorrow, 
         there is a lot of chance that the volatility will be quite high in the next day for bad or for good depending on what comes out of it.
-        
+
         For the prediction part, we decided to explore 2 differents ways to "predict" the future price of the stock. The first method is the simplest one. 
         It is an exponential moving average rolling over periodically. It is based on the last 60 days prices and will return prices for the next following month. 
         The goal is to compare graphically the difference between this method and the more complex one which is a model analyzing the last year data. 
@@ -180,7 +180,7 @@ if selected == 'Stock Ideas':
                 return '{:,.0f}'.format(value)
             else:
                 return value
-        
+
         def convert_market_cap2(value, column_name):
             if isinstance(value, str):
                 if 'B' in value:
@@ -196,7 +196,7 @@ if selected == 'Stock Ideas':
                 return '{:,.0f}'.format(value)
             else:
                 return '{:,.2f}'.format(value)
-            
+ 
         def convert_volume2(value, column_name):
             if isinstance(value, str):
                 if 'B' in value:
@@ -225,11 +225,11 @@ if selected == 'Stock Ideas':
             st.subheader('Top 100 stocks with higher profitability today')
             st.dataframe(dfw_clean)
             st.markdown('')
-        
+     
         except:
             st.markdown('**:red[Not able to display "Top 100 stocks with higher profitability today" due to API unavailability]**')
             st.markdown('')
-        
+     
         try:
             df_losers = si.get_day_losers()
             dfl_clean = df_losers.drop(['Avg Vol (3 month)', 'PE Ratio (TTM)', 'Change'], axis=1)
@@ -240,11 +240,11 @@ if selected == 'Stock Ideas':
             st.subheader('Top 100 stocks with higher losses today')
             st.dataframe(dfl_clean)
             st.markdown('')
-        
+    
         except:
             st.markdown('**:red[Not able to display "Top 100 stocks with higher losses today" due to API unavailability]**')
             st.markdown('')
-        
+    
         try:
             df_active = si.get_day_most_active()
             dfa_clean = df_active.drop(['Market Cap', 'PE Ratio (TTM)', 'Change'], axis=1)
@@ -253,11 +253,11 @@ if selected == 'Stock Ideas':
             st.subheader('Top 100 stocks with higher trading volume today')
             st.dataframe(dfa_clean)
             st.markdown('')
-        
+  
         except:
             st.markdown('**:red[Not able to display "Top 100 stocks with higher trading volume today" due to API unavailability]**')
             st.markdown('')
-        
+    
         try:
             df_value = si.get_undervalued_large_caps()
             dfv_clean = df_value.drop(['Avg Vol (3 month)', 'PE Ratio (TTM)', 'Change', '% Change', '52 Week Range'], axis=1)
@@ -266,7 +266,7 @@ if selected == 'Stock Ideas':
             st.subheader('Top 100 undervalued large cap stocks')
             st.dataframe(dfv_clean)
             st.markdown('')
-        
+   
         except:
             st.markdown('**:red[Not able to display "Top 100 undervalued large cap stocks" due to API unavailability]**')
             st.markdown('')
@@ -298,9 +298,7 @@ if selected == 'Summary':
 
         response = requests.get(url)
         soup = BeautifulSoup(response.text, 'html.parser')
-
         left_table_rows = soup.find('div', {'data-test': 'left-summary-table'}).find_all('tr')
-
         right_table_rows = soup.find('div', {'data-test': 'right-summary-table'}).find_all('tr')
 
         # Create a dictionary to store the extracted data:
@@ -322,15 +320,15 @@ if selected == 'Summary':
         df_summary = df_summary.rename(columns={0: 'Value'})
 
         # Display the dataframe:
-    
+ 
         col1, col2, col3 = st.columns([1.5,1,1.5])
-        
+    
         for index, row in df_summary.iloc[0:4].iterrows():
                col1.metric(label=index, value=row['Value'])
 
         for index, row in df_summary.iloc[8:12].iterrows():
                col2.metric(label=index, value=row['Value'])
- 
+
         for index, row in df_summary.iloc[4:8].iterrows():
                col3.metric(label=index, value=row['Value'])
 
@@ -383,7 +381,6 @@ if selected == 'Daily Prices':
         df['Dividends'] = df['Dividends'].round(2)
         df['Dividends'] = df['Dividends'].apply(lambda x: '${:.2f}'.format(x))
         df['% Change'] = df['% Change'].apply(lambda x: '{:.2%}'.format(x))
-
         daily_df = df
         daily_df2 = daily_df.drop('Dividends', axis=1)
 
@@ -538,25 +535,21 @@ if selected == 'Financial Statements':
 
         sorted_data = sorted(zip(quarters, estimated_eps), key=lambda x: x[0])
         sorted_quarters, sorted_estimated_eps = zip(*sorted_data)
-
         fig_actual_eps.add_trace(go.Bar(x=quarters, y=actual_eps, width=0.4, name='Actual EPS', marker_color='#006837', text=[f"{x}%" for x in actual_eps], textposition='auto', textfont=dict(color='#DCD6D0')))
         fig_actual_eps.add_trace(go.Scatter(x=sorted_quarters, y=sorted_estimated_eps, mode='lines', name='Estimated EPS', line=dict(color='#b1de71', width=2), text=[f'{x}%' for x in sorted_estimated_eps], textposition='top center', textfont=dict(color='#DCD6D0')))
-
         fig_actual_eps.update_layout(xaxis=dict(tickmode='linear', tick0=1, dtick=1), xaxis_title='Quarter', yaxis_title='Earnings Per Share (EPS)', title=f'Actual Earnings Per Share for {ticker}', legend=dict(y=-0.3, yanchor='top', x=0.5, xanchor='center'))
-                
+          
         # Create the figure for the second plot:
 
-        mod_surprise_percent = [abs(sp*20) for sp in surprise_percent]
-                
+        mod_surprise_percent = [abs(sp*20) for sp in surprise_percent]              
         fig_surprise_percent = go.Figure()
-
         fig_surprise_percent.add_trace(go.Scatter(x=quarters, y=surprise_percent, mode='markers', marker=dict(size=mod_surprise_percent, opacity=1.0, color='#006837'), name='Surprise Percentage'))
 
         for i in range(len(quarters)):
             fig_surprise_percent.add_annotation(x=quarters[i], y=surprise_percent[i], text=f'{surprise_percent[i]}%', showarrow=False, font=dict(size=16, color='#DCD6D0'))
 
         fig_surprise_percent.update_layout(xaxis=dict(tickmode='linear', tick0=1, dtick=1), xaxis_title='Quarter', yaxis_title='Surprise Percentage (%)', title=f'Surprise Percentage for {ticker}', showlegend=True, legend=dict(y=-0.3, yanchor='top', x=0.5, xanchor='center'))
-        
+ 
         # Display the charts using st.plotly_chart():
 
         st.plotly_chart(fig_actual_eps, use_container_width=True, config={'displayModeBar': False}, name='Actual EPS Chart')
@@ -567,7 +560,7 @@ if selected == 'Financial Statements':
         fd = FundamentalData(key)
 
         # Balance sheet:
-   
+
         balance_sheet = fd.get_balance_sheet_annual(ticker)[0]
 
         # Formatting the balance sheet:
@@ -614,7 +607,7 @@ if selected == 'Financial Statements':
         st.markdown('')
 
         # Income statement:
- 
+
         income_statement = fd.get_income_statement_annual(ticker)[0]
 
         # Formatting the income statement:
@@ -755,7 +748,7 @@ if selected == 'Analysts Recommendations':
         # Analyst Recommendation Finnhub:
 
         graph, metrics = st.columns([5,2])
-        
+      
         with graph:
             def plot_stock_data(stock_data):
                 symbol = stock_data[0]['symbol']
@@ -794,7 +787,7 @@ if selected == 'Analysts Recommendations':
             st.metric (label='Average recommendation', value=f'{recommendation}')
             st.metric (label='Mean target price', value=f'${targetMeanPrice}')
             st.metric (label='Current price', value=f'${currentPrice}')
-        
+    
         def create_stock_dataframe(stock_data):
             periods = [data['period'] for data in stock_data]
             buys = [data['buy'] for data in stock_data]
@@ -848,7 +841,7 @@ if selected == 'News':
         news = finnhub_client.company_news(ticker, _from=from_date, to=to_date)
 
         # Display the news in the desired format:
-        
+       
         for n in news:
             st.header(n['headline'])
             st.markdown('')
@@ -908,9 +901,9 @@ if selected == 'Predictions':
 
         EMA = st.container()
         time_series = st.container()
-        
+      
         # EMA model:
-        
+     
         with EMA:
 
             st.subheader(f'EMA model for {ticker}')
@@ -947,19 +940,18 @@ if selected == 'Predictions':
             # Display the Plotly figure in Streamlit:
 
             st.plotly_chart(fig)
-        
+    
         # Time series model:
 
         with time_series:
-        
+     
             st.subheader(f'Time series prediction model for {ticker}')
             st.markdown('')
-            
+        
             distributions = st.container()
-            prices = st.container()
             confusion = st.container()
             prediction = st.container()
-            
+    
             with distributions:
 
                 st.markdown('')
@@ -976,7 +968,7 @@ if selected == 'Predictions':
                     trace_name = col.capitalize()
                     fig.add_trace(go.Histogram(x=df[col], name=trace_name))
                     fig.update_layout(barmode='overlay', bargap=0.1)
-                    
+             
                 fig.update_layout(title='Distribution of the Selected Features', xaxis_title='Price/Volume', yaxis_title='Value Count')
                 fig.update_traces(visible='legendonly')
                 fig.update_traces(visible=True, selector=dict(name='Open'))
@@ -991,26 +983,6 @@ if selected == 'Predictions':
             # Add is_quarter_end column:
 
             df['is_quarter_end'] = np.where(df['month']%3==0,1,0)
-
-            # Plot average prices by year:
-
-            with prices:
-
-                st.markdown('')
-                st.markdown('**Average prices by year of prediction:**')
-                st.markdown('')
-                st.markdown(':red[*You can select and disselect the features shown in the graph through the legend in the left upper corner.]')
-
-                data_grouped = df.groupby('year').mean()
-                fig = go.Figure()
-                for col in ['open', 'high', 'low', 'close']:
-
-                    trace_name = col.capitalize()
-                    fig.add_trace(go.Bar(x=data_grouped.index, y=data_grouped[col], name=trace_name))
-
-                fig.update_layout(title='Average Prices by Year', barmode='group', xaxis_title='Year', yaxis_title='Average Price')
-                fig.update_yaxes(range=[120, 160], title='Value Count')
-                st.plotly_chart(fig)
 
             # Add additional columns:
 
@@ -1035,7 +1007,7 @@ if selected == 'Predictions':
 
             for i in range(3):
                 models[i].fit(X_train, Y_train)
-            
+
             with confusion:
 
                 st.markdown('**Training Accuracy:** ', metrics.roc_auc_score(Y_train, models[i].predict_proba(X_train)[:,1]))
@@ -1088,7 +1060,7 @@ if selected == 'Predictions':
                 predicted_prices.append(last_close * (1 + 0.01 * pred))
 
             with prediction:
-                        
+        
                 # Plotting the actual and predicted prices together:
 
                 fig = go.Figure()
@@ -1197,9 +1169,7 @@ if selected == 'Final Analysis':
 
         response = requests.get(url)
         soup = BeautifulSoup(response.text, 'html.parser')
-
         left_table_rows = soup.find('div', {'data-test': 'left-summary-table'}).find_all('tr')
-
         right_table_rows = soup.find('div', {'data-test': 'right-summary-table'}).find_all('tr')
 
         # Create a dictionary to store the extracted data:
@@ -1221,22 +1191,22 @@ if selected == 'Final Analysis':
         df_summary = df_summary.rename(columns={0: 'Value'})
 
         with metric:
-            
+  
             st.markdown ('**According to analysts :**')
             st.metric (label='Average recommendation', value=f'{recommendation}')
             st.metric (label='Mean target price', value=f'${targetMeanPrice}')
             st.metric (label='Current price', value=f'${currentPrice}')
             st.metric('Annual Return is',annual_returnp)
-            for index, row in df_summary.iloc[0:4].iterrows():
+            for index, row in df_summary.iloc[9:12].iterrows():
                 st.metric(label=index, value=row['Value'])
 
         with graph:
-        
+
             # Retrieve the historical stock data for the past 52 weeks and the current price:
 
             stock_data = yf.download(ticker, period="1y")
             current_price = stock_data["Close"].iloc[-1]
-            
+  
             # Calculate the 52 week range:
 
             high_52_weeks = stock_data["High"].rolling(window=52).max().iloc[-1]
@@ -1255,7 +1225,7 @@ if selected == 'Final Analysis':
                               title=dict(text=f"{ticker} 52 Week Range"), height=500, width=500, margin=dict(l=0, r=0, t=40, b=0))
             st.plotly_chart(fig)
 
-            # finnhub_client.recommendation_trends(ticker).[values.index(max(values))]:
+            
 
     # Creating the footer:
 
