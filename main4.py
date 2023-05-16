@@ -11,17 +11,15 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
-from plotly.subplots import make_subplots
 import requests
 from sklearn import metrics
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
+from sklearn.preprocessing import MinMaxScaler
+from sklearn import metrics
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 import streamlit as st
 from streamlit_option_menu import option_menu
-from xgboost import XGBClassifier
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.models import Sequential
 from yahoo_fin import stock_info as si
 import yfinance as yf
 
@@ -528,6 +526,7 @@ if selected == 'Financial Statements':
         actual_eps = [round(x['actual'],2) for x in earnings_data]
         estimated_eps = [round(x['estimate'],2) for x in earnings_data]
         surprise_percent = [round(x['surprisePercent'],2) for x in earnings_data]
+        mod_surprise_percent = [abs(sp*20) for sp in surprise_percent]  
 
         # Create the figure for the first plot:
 
@@ -538,12 +537,30 @@ if selected == 'Financial Statements':
         fig_actual_eps.add_trace(go.Bar(x=quarters, y=actual_eps, width=0.4, name='Actual EPS', marker_color='#006837', text=[f"{x}%" for x in actual_eps], textposition='auto', textfont=dict(color='#DCD6D0')))
         fig_actual_eps.add_trace(go.Scatter(x=sorted_quarters, y=sorted_estimated_eps, mode='lines', name='Estimated EPS', line=dict(color='#b1de71', width=2), text=[f'{x}%' for x in sorted_estimated_eps], textposition='top center', textfont=dict(color='#DCD6D0')))
         fig_actual_eps.update_layout(xaxis=dict(tickmode='linear', tick0=1, dtick=1), xaxis_title='Quarter', yaxis_title='Earnings Per Share (EPS)', title=f'Actual Earnings Per Share for {ticker}', legend=dict(y=-0.3, yanchor='top', x=0.5, xanchor='center'))
-          
+
         # Create the figure for the second plot:
 
-        mod_surprise_percent = [abs(sp*20) for sp in surprise_percent]              
         fig_surprise_percent = go.Figure()
-        fig_surprise_percent.add_trace(go.Scatter(x=quarters, y=surprise_percent, mode='markers', marker=dict(size=mod_surprise_percent, opacity=1.0, color='#006837'), name='Surprise Percentage'))
+        legend_labels = set()
+
+        for q, sp, mod_sp in zip(quarters, surprise_percent, mod_surprise_percent):
+
+            if sp < 0:
+                color = '#8B0000'
+                legend_label = 'Surprise Percentage (-)'
+
+            else:
+                color = '#006837'
+                legend_label = 'Surprise Percentage (+)'
+
+            # Check if the combination of color and legend label already exists:
+
+            if (color, legend_label) not in legend_labels:
+                legend_labels.add((color, legend_label))
+                fig_surprise_percent.add_trace(go.Scatter(x=[q], y=[sp], mode='markers', marker=dict(size=[mod_sp], opacity=1.0, color=color), name=legend_label))
+
+            else:
+                fig_surprise_percent.add_trace(go.Scatter(x=[q], y=[sp], mode='markers', marker=dict(size=[mod_sp], opacity=1.0, color=color), showlegend=False))
 
         for i in range(len(quarters)):
             fig_surprise_percent.add_annotation(x=quarters[i], y=surprise_percent[i], text=f'{surprise_percent[i]}%', showarrow=False, font=dict(size=16, color='#DCD6D0'))
@@ -781,13 +798,31 @@ if selected == 'Analysts Recommendations':
             plot_stock_data(finnhub_client.recommendation_trends(ticker))
 
         with metrics:
+            recommendation = float(recommendation)
+
+            if recommendation >= 1 and recommendation < 1.5:
+                status = 'Strong Buy'
+
+            elif recommendation >= 1.5 and recommendation < 2.5:
+                status = 'Buy'
+
+            elif recommendation >= 2.5 and recommendation < 3.5:
+                status = 'Hold'
+
+            elif recommendation >= 3.5 and recommendation < 4.5:
+                status = 'Sell'
+
+            else:
+                status = 'Strong Sell'
+
             st.markdown('')
             st.markdown('')
             st.markdown ('**According to analysts :**')
             st.metric (label='Average recommendation', value=f'{recommendation}')
+            st.metric (label='Analyst verdict', value=f'{status}')
             st.metric (label='Mean target price', value=f'${targetMeanPrice}')
             st.metric (label='Current price', value=f'${currentPrice}')
-    
+
         def create_stock_dataframe(stock_data):
             periods = [data['period'] for data in stock_data]
             buys = [data['buy'] for data in stock_data]
@@ -901,12 +936,13 @@ if selected == 'Predictions':
 
         EMA = st.container()
         time_series = st.container()
-      
-        # EMA model:
-     
-        with EMA:
 
+        # EMA model:
+
+        with EMA:
             st.subheader(f'EMA model for {ticker}')
+            st.markdown('')
+            st.markdown('Quick explanation of the EMA model.')
             st.markdown('')
 
             # Calculate the EMA for a given time period (e.g. 20 days):
@@ -940,137 +976,116 @@ if selected == 'Predictions':
             # Display the Plotly figure in Streamlit:
 
             st.plotly_chart(fig)
-    
+
+            # Display the distribution of features of the data:
+
+            st.markdown('')
+            st.markdown('**Distribution of input values:**')
+            st.markdown('')
+            st.markdown(':red[*You can select and disselect the features shown in the graph through the legend in the left upper corner.]')
+
+            # Plot distributions of features:
+
+            fig = go.Figure()
+            features = ['open', 'high', 'low', 'close', 'volume']
+
+            for col in features:
+                trace_name = col.capitalize()
+                fig.add_trace(go.Histogram(x=df[col], name=trace_name))
+                fig.update_layout(barmode='overlay', bargap=0.1)
+
+            fig.update_layout(title='Distribution of the Selected Features', xaxis_title='Price/Volume', yaxis_title='Value Count')
+            fig.update_traces(visible='legendonly')
+            fig.update_traces(visible=True, selector=dict(name='Open'))
+            st.plotly_chart(fig)
+
         # Time series model:
 
         with time_series:
-     
             st.subheader(f'Time series prediction model for {ticker}')
             st.markdown('')
-        
-            distributions = st.container()
-            confusion = st.container()
-            prediction = st.container()
-    
-            with distributions:
+            st.markdown('Quick explanation of the Time series model.')
+            st.markdown('')
 
-                st.markdown('')
-                st.markdown('**Distribution of input values:**')
-                st.markdown('')
-                st.markdown(':red[*You can select and disselect the features shown in the graph through the legend in the left upper corner.]')
+            # Load the preprocessed data:
 
-                # Plot distributions of features:
+            data = df['close']
 
-                fig = go.Figure()
-                features = ['open', 'high', 'low', 'close', 'volume']
+            # Reshape the data to a 2D array:
 
-                for col in features:
-                    trace_name = col.capitalize()
-                    fig.add_trace(go.Histogram(x=df[col], name=trace_name))
-                    fig.update_layout(barmode='overlay', bargap=0.1)
-             
-                fig.update_layout(title='Distribution of the Selected Features', xaxis_title='Price/Volume', yaxis_title='Value Count')
-                fig.update_traces(visible='legendonly')
-                fig.update_traces(visible=True, selector=dict(name='Open'))
-                st.plotly_chart(fig)
+            data = data.values.reshape(-1, 1)
 
-            # Add date-related columns:
+            # Scale the data to a range between 0 and 1:
 
-            df['day'] = df['date'].dt.day
-            df['month'] = df['date'].dt.month
-            df['year']= df['date'].dt.year
+            scaler = MinMaxScaler(feature_range=(0, 1))
+            scaled_data = scaler.fit_transform(data)
 
-            # Add is_quarter_end column:
+            # Split the data into training and testing sets:
 
-            df['is_quarter_end'] = np.where(df['month']%3==0,1,0)
+            train_size = int(len(scaled_data) * 0.7)
+            test_size = len(scaled_data) - train_size
+            train_data = scaled_data[:train_size, :]
+            test_data = scaled_data[train_size:, :]
 
-            # Add additional columns:
+            # Create a function to generate training and testing data for the LSTM model:
 
-            df['open-close'] = df['open'] - df['close']
-            df['low-high'] = df['low'] - df['high']
-            df['target'] = np.where(df['close'].shift(-1) > df['close'], 1, 0)
+            def create_dataset(dataset, time_steps=1):
+                X, Y = [], []
+                for i in range(len(dataset)-time_steps-1):
+                    a = dataset[i:(i+time_steps), 0]
+                    X.append(a)
+                    Y.append(dataset[i + time_steps, 0])
+                return np.array(X), np.array(Y)
 
-            # Prepare data for modeling:
+            # Reshape the data for the LSTM model:
 
-            features = df[['open-close', 'low-high', 'is_quarter_end']]
-            target = df['target']
-            scaler = StandardScaler()
-            features = scaler.fit_transform(features)
+            time_steps = 60
+            X_train, Y_train = create_dataset(train_data, time_steps)
+            X_test, Y_test = create_dataset(test_data, time_steps)
 
-            # Split data into training and validation sets:
+            # Reshape X_train and X_test:
 
-            X_train, X_valid, Y_train, Y_valid = train_test_split(features, target, test_size=0.1, random_state=2022)
+            X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+            X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
 
-            # Train models and evaluate performance:
+            # Define the LSTM model:
 
-            models = [LogisticRegression(), SVC(kernel='poly', probability=True), XGBClassifier()]
+            model = Sequential()
+            model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
+            model.add(Dropout(0.2))
+            model.add(LSTM(units=50))
+            model.add(Dropout(0.2))
+            model.add(Dense(units=1))
 
-            for i in range(3):
-                models[i].fit(X_train, Y_train)
+            # Compile the model and fit it to the training data:
 
-            with confusion:
+            model.compile(optimizer='adam', loss='mean_squared_error', run_eagerly=True)
+            model.fit(X_train, Y_train, epochs=50, batch_size=32)
 
-                st.markdown('**Training Accuracy:** ', metrics.roc_auc_score(Y_train, models[i].predict_proba(X_train)[:,1]))
-                st.markdown('**Validation Accuracy:** ', metrics.roc_auc_score(Y_valid, models[i].predict_proba(X_valid)[:,1]))
+            # Make predictions on the test data:
 
-                # Compute confusion matrix:
+            predictions = model.predict(X_test, batch_size=32)
 
-                cm = confusion_matrix(Y_valid, models[0].predict(X_valid))
+            # Calculate the evaluation metrics of the model:
 
-                # Create subplot with heatmap and annotations:
+            mse = mean_squared_error(Y_test, predictions)
+            mae = mean_absolute_error(Y_test, predictions)
+            rmse = np.sqrt(mse)
 
-                fig = make_subplots(rows=1, cols=2, column_widths=[0.7, 0.3], subplot_titles=("Confusion Matrix", "Counts"))
+            st.markdown('')
+            st.markdown(f'MSE: {mse}')
+            st.markdown(f'MAE: {mae}')
+            st.markdown(f'RMSE: {rmse}')
+            st.markdown('')
 
-                # Add heatmap to subplot:
+            # Plot the actual and predicted stock prices:
 
-                fig.add_trace(go.Heatmap(z=cm, x=["0", "1"], y=["0", "1"], colorscale='Blues', showscale=False, hoverinfo="skip"), row=1, col=1)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=np.arange(len(Y_test)), y=Y_test, mode='lines', name='Actual'))
+            fig.add_trace(go.Scatter(x=np.arange(len(predictions)), y=predictions, mode='lines', name='Predicted'))
+            fig.update_layout(title='Actual vs Predicted Stock Prices', xaxis_title='Time', yaxis_title='Stock Price', showlegend=True)
 
-                # Add annotations to heatmap:
-
-                for i, row in enumerate(cm):
-                    for j, value in enumerate(row):
-                        fig.add_annotation(x=j+1, y=i+1, text=str(value), showarrow=False, font=dict(color='white', size=18))
-
-                # Add counts to subplot:
-
-                fig.add_trace(go.Bar(x=["0", "1"], y=[sum(cm[:,0]), sum(cm[:,1])],marker=dict(color='lightskyblue'),
-                                    text=[sum(cm[:,0]), sum(cm[:,1])],textposition='auto',opacity=0.7),row=1, col=2)
-
-                # Update subplot layout:
-
-                fig.update_layout(title='Confusion Matrix', xaxis_title='Predicted label', yaxis_title='True label',
-                                height=400, margin=dict(t=100, b=0, l=0, r=0), showlegend=False)
-
-                st.plotly_chart(fig)
-
-            # Making predictions on the test data:
-
-            last_close = df['close'].tail(1).values[0]
-            X_test = scaler.transform(df[['open-close', 'low-high', 'is_quarter_end']].tail(1))
-            preds = []
-
-            for model in models:
-                preds.append(model.predict_proba(X_test)[:,1])
-
-            # Computing the predicted prices based on the last closing price and the predicted probabilities:
-
-            predicted_prices = []
-
-            for pred in preds:
-                predicted_prices.append(last_close * (1 + 0.01 * pred))
-
-            with prediction:
-        
-                # Plotting the actual and predicted prices together:
-
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=df['date'], y=df['close'], name='Actual', line=dict(color='blue')))
-                fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[0], name='Logistic Regression', line=dict(color='orange')))
-                fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[1], name='SVM', line=dict(color='green')))
-                fig.add_trace(go.Scatter(x=[df['date'].tail(1).values[0]], y=predicted_prices[2], name='XGBoost', line=dict(color='red')))
-                fig.add_shape(type='line', x0=df['date'].tail(1).values[0], y0=0, x1=df['date'].tail(1).values[0], y1=1, xref='x', yref='paper', line=dict(color='gray', dash='dash'))
-                fig.update_layout(title='Actual vs Predicted Stock Prices', xaxis_title='date', yaxis_title='price', legend=dict(x=0, y=1, bgcolor='rgba(255,255,255,0.5)', bordercolor='rgba(0,0,0,0)'))
-                st.plotly_chart(fig)
+            st.plotly_chart(fig)
 
     # Creating the footer:
 
@@ -1093,11 +1108,12 @@ if selected == 'Final Analysis':
 
     with content:
 
-        st.subheader('Those following recap information can help you make a choice on whether buy, sell or wait.')
+        st.subheader('These following analyses can help you make an educated choice on whether buy, sell or wait on a stock...')
         st.markdown('')
         st.markdown('')
+        st.markdown ('**According to analysts:**')
 
-        metric, graph, space = st.columns ([5,3,5])
+        metric, metric2, graph = st.columns ([5,5,5])
 
         # Analyst recommandation Yahoo Finance:
 
@@ -1130,6 +1146,23 @@ if selected == 'Final Analysis':
         recommendations.append(recommendation)
         targetMeanPrices.append(targetMeanPrice)
         currentPrices.append(currentPrice)
+
+        recommendation = float(recommendation)
+
+        if recommendation >= 1 and recommendation < 1.5:
+            status = 'Strong Buy'
+
+        elif recommendation >= 1.5 and recommendation < 2.5:
+            status = 'Buy'
+
+        elif recommendation >= 2.5 and recommendation < 3.5:
+            status = 'Hold'
+
+        elif recommendation >= 3.5 and recommendation < 4.5:
+            status = 'Sell'
+
+        else:
+            status = 'Strong Sell'
 
         # Getting the data out of yahoo finance:
 
@@ -1189,40 +1222,46 @@ if selected == 'Final Analysis':
         df_summary = pd.DataFrame(data_summary, index=[0])
         df_summary = df_summary.transpose()
         df_summary = df_summary.rename(columns={0: 'Value'})
-
+    
         with metric:
-  
-            st.markdown ('**According to analysts :**')
             st.metric (label='Average recommendation', value=f'{recommendation}')
+            st.metric (label='Analyst verdict', value=f'{status}')
             st.metric (label='Mean target price', value=f'${targetMeanPrice}')
             st.metric (label='Current price', value=f'${currentPrice}')
+
+        with metric2:
             st.metric('Annual Return is',annual_returnp)
+            
             for index, row in df_summary.iloc[9:12].iterrows():
                 st.metric(label=index, value=row['Value'])
 
         with graph:
-
             # Retrieve the historical stock data for the past 52 weeks and the current price:
 
-            stock_data = yf.download(ticker, period="1y")
-            current_price = stock_data["Close"].iloc[-1]
-  
+            stock_data = yf.download(ticker, period='1y')
+            current_price = stock_data['Close'].iloc[-1]
+
             # Calculate the 52 week range:
 
-            high_52_weeks = stock_data["High"].rolling(window=52).max().iloc[-1]
-            low_52_weeks = stock_data["Low"].rolling(window=52).min().iloc[-1]
+            high_52_weeks = stock_data['High'].rolling(window=52).max().iloc[-1]
+            low_52_weeks = stock_data['Low'].rolling(window=52).min().iloc[-1]
 
             # Create a vertical colorbar style plot to display the 52 week range:
 
             fig = go.Figure()
+
+            # Plot the 52-week range bar with a higher z-index to ensure it's below the current price bar:
+
             fig.add_trace(go.Bar(x=[0], y=[high_52_weeks - low_52_weeks],
-                                 base=[low_52_weeks], width=[0.1], marker_color='lightgrey', name="52 Week Range"))
-            fig.add_trace(go.Bar(x=[0], y=[current_price - low_52_weeks],
-                                 base=[low_52_weeks], width=[0.1], marker_color='green', name="Current Price"))
-            fig.add_trace(go.Scatter(x=[0], y=[current_price], mode="lines", 
-                                     line=dict(color="black", width=2, dash="dash"), name="Current Price Line"))
-            fig.update_layout(yaxis=dict(title="Stock Price"), xaxis=dict(visible=False), showlegend=True,
-                              title=dict(text=f"{ticker} 52 Week Range"), height=500, width=500, margin=dict(l=0, r=0, t=40, b=0))
+                                base=[low_52_weeks], width=[0.1], marker_color='#006837', name='52 Week Range'))
+
+            # Plot the line representing the current price on top of the bars:
+
+            fig.add_trace(go.Scatter(x=[0], y=[current_price], mode='markers',
+                                    line=dict(color='#8B0000', width=2), name='Current Price'))
+
+            fig.update_layout(yaxis=dict(title='Stock Price'), xaxis=dict(visible=False), legend=dict(orientation='h', yanchor='bottom', y=-0.15, xanchor='right', x=0.9), title=dict(text=f'{ticker} Price 52 Week Range'), height=350, width=300, margin=dict(l=0, r=0, t=40, b=0))
+
             st.plotly_chart(fig)
 
     # Creating the footer:
