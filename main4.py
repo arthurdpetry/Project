@@ -13,13 +13,9 @@ import plotly.express as px
 import plotly.graph_objs as go
 import requests
 from sklearn import metrics
-from sklearn.preprocessing import MinMaxScaler
 from sklearn import metrics
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 import streamlit as st
 from streamlit_option_menu import option_menu
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.models import Sequential
 from yahoo_fin import stock_info as si
 import yfinance as yf
 
@@ -126,7 +122,8 @@ if selected == 'Home':
         Those data are there for the ones willing to analyze more deeply the numbers.
 
         For "Analysts Recommandations", you can find a graph showing you the rating given by a number of analysts for the ticker you entered. 
-        Again, it is supposed to give you a tendency of what people expect from this stock. We also display the mean recommandation and the mean targeted price by those analysts.
+        Again, it is supposed to give you a tendency of what people expect from this stock. We also display the mean recommandation, the analyst verdict and the mean targeted price by those analysts.
+        The analyst verdict is calculated with the mean recommendation, and is based on this scale: Strong buy - from 1 to 1.5; Buy - from 1.5 to 2.5; Hold - from 2.5 and 3.5; Sell - from 3.5 to 4.5; Strong sell - from 4.5 to 5.
 
         As for the "News" page, you find the 20 latests news regarding the ticker you entered. You see the headline, the date, a summary of the news and the url to go directly to it. 
         News are a really helpful tool to analyse the future of a stock. If you know that the stock is having a important board meeting tomorrow, 
@@ -969,7 +966,7 @@ if selected == 'Predictions':
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df.index, y=df['close'], name='Actual'))
             fig.add_trace(go.Scatter(x=df.index, y=ema, name='EMA'))
-            fig.add_trace(go.Scatter(x=df.index[-30:] + pd.DateOffset(days=30), y=ema_predictions, name='EMA Predictions'))
+            fig.add_trace(go.Scatter(x=df.index[-30:] + pd.DateOffset(days=42), y=ema_predictions, name='EMA Predictions'))
             fig.add_shape(type='line', x0=df.index[0], y0=threshold, x1=df.index[-1], y1=threshold, line=dict(color='Red', dash='dash'), name='Threshold')
             fig.update_layout(xaxis=dict(title='Date'), yaxis=dict(title='Price'), hovermode='x', title='EMA Model for ' + ticker)
 
@@ -1004,88 +1001,12 @@ if selected == 'Predictions':
         with time_series:
             st.subheader(f'Time series prediction model for {ticker}')
             st.markdown('')
-            st.markdown('Quick explanation of the Time series model.')
+            st.markdown('Quick explanation of the Time series model. (to do)')
             st.markdown('')
-
-            # Load the preprocessed data:
-
-            data = df['close']
-
-            # Reshape the data to a 2D array:
-
-            data = data.values.reshape(-1, 1)
-
-            # Scale the data to a range between 0 and 1:
-
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            scaled_data = scaler.fit_transform(data)
-
-            # Split the data into training and testing sets:
-
-            train_size = int(len(scaled_data) * 0.7)
-            test_size = len(scaled_data) - train_size
-            train_data = scaled_data[:train_size, :]
-            test_data = scaled_data[train_size:, :]
-
-            # Create a function to generate training and testing data for the LSTM model:
-
-            def create_dataset(dataset, time_steps=1):
-                X, Y = [], []
-                for i in range(len(dataset)-time_steps-1):
-                    a = dataset[i:(i+time_steps), 0]
-                    X.append(a)
-                    Y.append(dataset[i + time_steps, 0])
-                return np.array(X), np.array(Y)
-
-            # Reshape the data for the LSTM model:
-
-            time_steps = 60
-            X_train, Y_train = create_dataset(train_data, time_steps)
-            X_test, Y_test = create_dataset(test_data, time_steps)
-
-            # Reshape X_train and X_test:
-
-            X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
-            X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
-
-            # Define the LSTM model:
-
-            model = Sequential()
-            model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
-            model.add(Dropout(0.2))
-            model.add(LSTM(units=50))
-            model.add(Dropout(0.2))
-            model.add(Dense(units=1))
-
-            # Compile the model and fit it to the training data:
-
-            model.compile(optimizer='adam', loss='mean_squared_error', run_eagerly=True)
-            model.fit(X_train, Y_train, epochs=50, batch_size=32)
-
-            # Make predictions on the test data:
-
-            predictions = model.predict(X_test, batch_size=32)
-
-            # Calculate the evaluation metrics of the model:
-
-            mse = mean_squared_error(Y_test, predictions)
-            mae = mean_absolute_error(Y_test, predictions)
-            rmse = np.sqrt(mse)
-
-            st.markdown('')
-            st.markdown(f'MSE: {mse}')
-            st.markdown(f'MAE: {mae}')
-            st.markdown(f'RMSE: {rmse}')
-            st.markdown('')
-
-            # Plot the actual and predicted stock prices:
-
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=np.arange(len(Y_test)), y=Y_test, mode='lines', name='Actual'))
-            fig.add_trace(go.Scatter(x=np.arange(len(predictions)), y=predictions, mode='lines', name='Predicted'))
-            fig.update_layout(title='Actual vs Predicted Stock Prices', xaxis_title='Time', yaxis_title='Stock Price', showlegend=True)
-
-            st.plotly_chart(fig)
+            st.markdown(''':red[
+                        The time series model is not working in streamlit due to inconsistencies between some modules, as well as problems in our respective environments.
+                        The model is going to be displayed utilizing the same data but in a jupyter notebook instead, and with simpler graphs.
+                        ]''')
 
     # Creating the footer:
 

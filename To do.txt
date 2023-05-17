@@ -1,10 +1,4 @@
 Finish the text in Home (Corentin)
 Try to publish the app (Corentin)
-Make the negative values red (Arthur) - done
-Scale for average recommendation and verdict (Arthur) - done
-Maybe fix the EMA model (Corentin)
 Add text expaining the 2 models (Corentin)
-Change the models to the time series and fix the graphs (Arthur)
-Look at the graph and try to fix it (Corentin) - done
-Scale for average recommendation and verdict again (Arthur) - done
-If you want to display the recommendation scale somewhere, put it in the home page (Corentin?)
+Preparing the notebook with the time series model (Corentin)
