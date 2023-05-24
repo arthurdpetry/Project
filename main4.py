@@ -13,7 +13,6 @@ import plotly.express as px
 import plotly.graph_objs as go
 import requests
 from sklearn import metrics
-from sklearn import metrics
 import streamlit as st
 from streamlit_option_menu import option_menu
 from yahoo_fin import stock_info as si
