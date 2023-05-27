@@ -1,27 +1,27 @@
 
 # Importing the required libraries:
 
-from alpha_vantage.fundamentaldata import FundamentalData
-from bs4 import BeautifulSoup
+import yfinance as yf
 import datetime as dt
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
 import finnhub
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
 import requests
+import streamlit as st
 from sklearn import metrics
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
-import streamlit as st
 from streamlit_option_menu import option_menu
 from xgboost import XGBClassifier
 from yahoo_fin import stock_info as si
-import yfinance as yf
+from alpha_vantage.fundamentaldata import FundamentalData
+from bs4 import BeautifulSoup
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 # FundamentalData's key:
 
@@ -45,6 +45,7 @@ footer = st.container()
 # Creating the alternative pages:
 
 with st.sidebar:
+
     selected = option_menu(menu_title = None, options = ['Home', 'Stock Ideas', 'Summary',
                                                          'Daily Prices', 'Monthly Returns', 'Financial Statements',
                                                          'Analysts Recommendations', 'News', 'Predictions',
@@ -109,12 +110,11 @@ if selected == 'Home':
         You can navigate through the other pages of the app after inputing the ticker (name) of the stock and the desired start and end dates.
         Under every page in our app, you will also be able to see a list of 10 similar stocks if you wanna compare them to the one you entered.
 
-        On "Stock Ideas", you can find trending stock to inspire yourself. You will see the Top 100 daily gainers (the stocks with the higest daily return).
-        You will see the Top 100 daily gainers (It is possible it is not displayed as the API seems not to works efficiently everytime with this dataframe).
-        There is also the Top 100 more traded today and Top 100 undervalued according to Yahoo finance.
+        On "Stock Ideas", you can find trending stock to inspire yourself if you don't know what you are looking for yet. You will see the Top 100 daily gainers (the stocks with the higest daily return).
+        You will see the Top 100 daily losers. There is also the Top 100 more traded today and Top 100 undervalued according to Yahoo finance.
 
-        On the page "Summary", you can find the 12 basic stock indicators. Those are there to help you understand the stocks without getting involved with more complicated information.
-        Information as the "52 weeks range" or the "EPS (earning per share)" can help you answering the question.
+        On the page "Summary", you can find the 15 basic stock indicators. Those are there to help you understand the stocks without getting involved with more complicated information.
+        Information as the "52 weeks range" or the "EPS (earning per share)" can help you answering the question. We will develop on that page what each info can be used for.
         
         Under "Daily Prices", you can firstly see a dynamic graph where you can zoom on a targeted zone. It helps seeing a more precise time zone.
         Under that graph you can observe a dataframe with the historical data if needed. Next to that, we computed 3 differents return metrics to help you interpret the data.
@@ -122,24 +122,28 @@ if selected == 'Home':
         Regarding "Monthly Returns", it is exactly the same principle as for "Daily Prices", differing in the time frame.
 
         Concerning "Financials Statements", you are able to see 2 differents graphs and 3 dataframes. The first graph is showing you the actual earnings per share compared to the ones expected by analysts.
-        It provides you a sort of feeling toward the stocks. For example, if it beats every quarters the expectations, It is a preety good indicator. That is why the second graph plots the surprise of the actual vs expectation.
-        It gives you an idea in "%" of that difference. The dataframes represent respectively the balance sheet, the income statement and the cash flow statement.
+        It provides you a sort of feeling toward the stocks. For example, if it beats every quarters the expectations, it is a preety good indicator that this i a solid company. 
+        That is why the second graph plots the surprise of the actual earnings vs expectation.
+        It gives you an idea in "%" of that difference. The more positive and big the numer is, the best the surprise was. The dataframes represent respectively the balance sheet, the income statement and the cash flow statement.
         Those data are there for the ones willing to analyze more deeply the numbers.
 
         For "Analysts Recommandations", you can find a graph showing you the rating given by a number of analysts for the ticker you entered. 
-        Again, it is supposed to give you a tendency of what people expect from this stock. We also display the mean recommandation, the analyst verdict and the mean targeted price by those analysts.
+        Again, it is supposed to give you a tendency of what expert people expect from this stock. We also display the mean recommandation, the analyst verdict and the mean targeted price by those analysts.
         The analyst verdict is calculated with the mean recommendation, and is based on this scale: Strong buy - from 1 to 1.5; Buy - from 1.5 to 2.5; Hold - from 2.5 and 3.5; Sell - from 3.5 to 4.5; Strong sell - from 4.5 to 5.
 
         As for the "News" page, you find the 20 latests news regarding the ticker you entered. You see the headline, the date, a summary of the news and the url to go directly to it. 
         News are a really helpful tool to analyse the future of a stock. If you know that the stock is having a important board meeting tomorrow, 
         there is a lot of chance that the volatility will be quite high in the next day for bad or for good depending on what comes out of it.
 
-        For the prediction part, we decided to explore 2 differents ways to "predict" the future price of the stock. The first method is the simplest one. 
+        For the prediction part, we decided to explore differents ways to "predict" the future price of the stock. The first method is the simplest one. 
         It is an exponential moving average, rolled over periodically. It is based on the last 60 days prices and will return prices for the next following month. 
-        The goal is to compare graphically the difference between this method and more complex models which analyse last year data. 
+        The goal of this part is to compare graphically the difference between this method and more complex models which analyse last year data. 
         It trains the data and then test them to give you an expected future price. Those modelling approaches are supposed to do a better job predicting than the EMA. 
         Complementary we should say that stock markets are unpredictable and our models cannot be used with certainty as they are not "really efficient" to predict the real future.
         If it was the case, everyone would be rich ;)  Their goal is more to give you a tendency of what is expected by those models for the future.
+
+        A quotation we really like regarding the prediction of stock prices comes from the famous statistician George Box who said "All models are wrong but some are useful". We don't aim
+        at being precise, just testing different approach to give tendency to users. 
         ''')
 
     # Creating the footer:
@@ -164,53 +168,75 @@ if selected == 'Stock Ideas':
     with content:
 
         def convert_market_cap(value):
+
             if isinstance(value, str):
                 suffixes = {'T': 1e12, 'B': 1e9}
+
                 if value[-1] in suffixes:
                     factor = suffixes[value[-1]]
                     value = value[:-1]
                     value = int(float(value) * factor)
                 else:
                     value = int(value.replace(',', ''))
+
                 return '{:,}'.format(value)
+
             else:
                 return '{:,}'.format(value)
 
         def format_numbers(value):
+
             if isinstance(value, (int, float)):
                 return '{:,.0f}'.format(value)
+
             else:
                 return value
 
         def convert_market_cap2(value, column_name):
+
             if isinstance(value, str):
+
                 if 'B' in value:
                     factor = 1e9
+
                 elif 'M' in value:
                     factor = 1e6
+
                 elif 'K' in value:
                     factor = 1e3
+
                 else:
                     factor = 1
+
                 value = float(value.replace(',', '').replace('$', '').replace(column_name, '').replace('M','').replace('B','')) * factor
+
             if column_name in ['Market Cap']:
                 return '{:,.0f}'.format(value)
+
             else:
                 return '{:,.2f}'.format(value)
  
         def convert_volume2(value, column_name):
+
             if isinstance(value, str):
+
                 if 'B' in value:
                     factor = 1e9
+
                 elif 'M' in value:
                     factor = 1e6
+
                 elif 'K' in value:
                     factor = 1e3
+
                 else:
                     factor = 1
+
                 value = float(value.replace(',', '').replace('$', '').replace(column_name, '').replace('M','').replace('B','')) * factor
+
             if column_name in ['Volume']:
                 return '{:,.0f}'.format(value)
+
             else:
                 return '{:,.2f}'.format(value)
 
@@ -334,6 +360,26 @@ if selected == 'Summary':
         for index, row in df_summary.iloc[5:10].iterrows():
                col3.metric(label=index, value=row['Value'])
 
+        # Explaining the different data:
+
+        st.markdown('------------------------------------------')
+        st.markdown('')
+        st.markdown('''
+        Those data above are useful, basic data regarding a stock. They are most of the time very helpful to decide what to do with the stock.
+        - Previous close, Open, Bid, Ask are data related to today's trading. 
+        - Day's range helps you seing where you situate yourself at the moment you want to buy. It is mostly useful when there are volatile days as it increases the range.
+        - 52 week range is super helpful to know where you are but this time on a yearly basis. It helps knowing it the stock is cheap or expensive at the moment. You need other data to determine that.
+        - Volume and average volume give you information on "Is this stock traded a lot today? Compared to what it is normally".
+        - Market Cap allows you to estimate if it is a big company or not. Most of the time big company are more secured as they experience high liquidity and "low" volatility.
+        - Beta is a measure of the volatility of this stock compared to the market. A beta < 1 is less volatile and > 1 is more. Volatility is a measure of risk.
+        - PE ratio (price to earnings) is simply the multiple at which the stock is traded compared to its revenue. It is a comparative ratio to peers stock.
+        A small PE ratio consider the stock as cheap compared to peers and inversely.
+        - EPS (earnings per share) is the revenue divided by the number of stock shares.
+        - Earnings date is the next date at which the company publish results.
+        - Dividend yield is the return you can expect from this stock just regarding dividend not a possible stock price increase. 
+        - Ex-dividend date is the date at which the dividend it detached from the stock price.
+        ''')
+
     # Creating the footer:
 
     with footer:
@@ -399,11 +445,13 @@ if selected == 'Daily Prices':
         # Displaying the dataframe:
 
         with dataframe_daily:
+
             st.dataframe(daily_df2)
 
         # Displaying the calculations:
 
         with calc_daily:
+
             annual_return = dfb['% Change'].mean()*252
             annual_returnp = '{:.2%}'.format(annual_return)
             st.metric('Annual Return is',annual_returnp)
@@ -413,6 +461,12 @@ if selected == 'Daily Prices':
             risk_adj_return = annual_return/stdev_round
             risk_adj_returnp = '{:.2%}'.format(risk_adj_return)
             st.metric('Risk Adjusted Return is',risk_adj_returnp)
+
+        st.markdown('------------------------------------------')
+        st.markdown('')
+        st.markdown('The annual return gives you the return the stock experienced during that period.')
+        st.markdown('The standard deviation is the measure of risk and volatility used in finance.')
+        st.markdown('The risk adjusted return is measured as the annual return divided by the standard deviation. The goal is to compare it to cash return.')
 
     # Creating the footer:
 
@@ -487,11 +541,13 @@ if selected == 'Monthly Returns':
         # Displaying the dataframe:
 
         with dataframe_daily:
+
             st.dataframe(monthly_df)
 
         # Displaying the calculations:
 
         with calc_daily:
+
             annual_return = dfb['% Change'].mean()*252
             annual_returnp = '{:.2%}'.format(annual_return)
             st.metric('Annual Return is',annual_returnp)
@@ -771,6 +827,7 @@ if selected == 'Analysts Recommendations':
         graph, metrics = st.columns([5,2])
       
         with graph:
+
             def plot_stock_data(stock_data):
                 symbol = stock_data[0]['symbol']
                 latest_data = stock_data[0]
@@ -802,6 +859,7 @@ if selected == 'Analysts Recommendations':
             plot_stock_data(finnhub_client.recommendation_trends(ticker))
 
         with metrics:
+
             recommendation = float(recommendation)
 
             if recommendation >= 1 and recommendation < 1.5:
@@ -843,6 +901,11 @@ if selected == 'Analysts Recommendations':
 
         df = create_stock_dataframe(finnhub_client.recommendation_trends(ticker))
         st.write(df)
+
+        st.markdown('------------------------------------------')
+        st.markdown('')
+        st.markdown('You can use those data made by experts to help you decide what to do with that stock. But be aware that they are no medium.')
+        st.markdown('You should analyse other data then that before making a decision but is is a useful source of information.')
 
     # Creating the footer:
 
@@ -944,6 +1007,7 @@ if selected == 'Predictions':
         # EMA model:
 
         with ema:
+
             st.subheader(f'EMA model for {ticker}')
             st.markdown('')
             st.markdown('''
@@ -951,10 +1015,10 @@ if selected == 'Predictions':
 
             Here's what the graph shows:
 
-            The actual prices of the stock over time, the EMA, which is a smoothed average of the prices. It helps highlight the overall trend of the stock.
+            The actual prices of the stock over time, the EMA, which is a smoothed average of the prices giving more power to latest data. It helps highlight the overall trend of the stock.
             The graph is interactive, allowing you to hover over the points to see the specific values at different dates. 
             The EMA is pertinent for stock price prediction because it smoothes price data and helps identify trends, support/resistance levels, crossovers, and potential reversals or breakouts.
-            It's important to note that while the EMA is a useful tool, it should not be used in isolation for stock price prediction. 
+            It's important to note that while the EMA is a useful tool (used a lot in finance), it should not be used in isolation for stock price prediction. 
             It is often used in conjunction with other technical indicators, fundamental analysis, and market trends to form a more comprehensive view of the stock's potential future movements.
             ''')
 
@@ -1015,6 +1079,7 @@ if selected == 'Predictions':
         # Other models:
 
         with other_models:
+
             st.subheader(f'Different models trying to predict future prices for {ticker}')
             st.markdown('')
             st.markdown('''
@@ -1141,7 +1206,7 @@ if selected == 'Predictions':
 
             # Configure the layout:
 
-            fig.update_layout(title='Actual vs Predicted Stock Prices', xaxis_title='Date', yaxis_title='Price', showlegend=True,
+            fig.update_layout(title='Actual vs Predicted Stock Prices', yaxis_title='Price', showlegend=True,
                               xaxis=dict(tickformat='%Y-%m-%d', showticklabels=False ),
                               shapes=[dict(type='line', x0=df['date'].iloc[window_size],y0=min(df['close']), x1=df['date'].iloc[window_size],y1=max(df['close']),
                                            line=dict(color='#DCD6D0', width=1,dash='dash')) for window_size in range(window_size, len(df['date']), window_size)])
@@ -1171,12 +1236,12 @@ if selected == 'Final Analysis':
 
     with content:
 
-        st.subheader('These following analyses can help you make an educated choice on whether buy, sell or wait on a stock...')
+        st.subheader('These following analyses are a summary of the whole app and can help you make an educated choice on whether buy, sell or wait on a stock...')
         st.markdown('')
         st.markdown('')
         st.markdown ('**According to analysts:**')
 
-        metric, metric2, graph = st.columns ([5,5,5])
+        metric, metric2, graph = st.columns ([1,1,1])
 
         # Analyst recommandation Yahoo Finance:
 
@@ -1288,12 +1353,14 @@ if selected == 'Final Analysis':
         df_summary = df_summary.rename(columns={0: 'Value'})
     
         with metric:
+
             st.metric (label='Average recommendation', value=f'{recommendation}')
             st.metric (label='Analyst verdict', value=f'{status}')
             st.metric (label='Mean target price', value=f'${targetMeanPrice}')
             st.metric (label='Current price', value=f'${currentPrice}')
 
         with metric2:
+
             st.metric('Annual Return is',annual_returnp)
 
             for index, row in df_summary.iloc[9:12].iterrows():
